@@ -164,7 +164,7 @@ pub enum Keyword {
 
 pub fn parse_keyword(str: &std::string::String) -> Option<Keyword> {
   for i in 0..15 {
-    if str.cmp(KEYWORDS.get(i).unwrap_or(&"\0".borrow()).to_string().borrow()) == core::cmp::Ordering::Equal {
+    if str.cmp(KEYWORDS.get(i).unwrap().to_string().borrow()) == core::cmp::Ordering::Equal {
       return Some(Keyword::from_usize(i).unwrap());
     }
   }

@@ -7,8 +7,11 @@ mod scanner;
 
 fn main() {
   let args: Vec<String> = env::args().collect();
-  // ik, hardcode, i will see how to manage args later...
-  match scanner::scanner::scan(Path::new("Z:/aplang.txt")) {
+  if args.len() < 2 {
+    println!("Ehm... pls provide a file to parse");
+    return;
+  }
+  match scanner::scanner::scan(Path::new(args.get(1).unwrap())) {
     Ok(vec) => {
       for t in vec.iter() {
         match *t {

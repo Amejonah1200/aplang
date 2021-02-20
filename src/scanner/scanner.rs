@@ -395,7 +395,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<Token>>> {
             None => Identifier(word)
           }
         }
-        other => Unknown(other.to_string()) // TODO KEYWORDS
+        other => Unknown(other.to_string())
       });
       true
     }
