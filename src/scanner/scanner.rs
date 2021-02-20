@@ -224,6 +224,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<Token>>> {
         '[' => LeftBracket,
         ']' => RightBracket,
         ',' => Comma,
+        '@' => At,
         '.' => Dot,
         ':' => search_and_consume_tokens(scanner.borrow_mut(), vec![
           (":", ColonColon)

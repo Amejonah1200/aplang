@@ -36,6 +36,10 @@ pub enum Token {
   Slash,
   HashTag,
   /**
+  * At: @
+  */
+  At,
+  /**
   * Tilde: ~
   */
   Tilde,
@@ -203,6 +207,7 @@ pub fn token_to_string(token: &Token) -> String {
     Token::Slash => String::from("Slash"),
     Token::HashTag => String::from("HashTag"),
     Token::Tilde => String::from("Tilde"),
+    Token::At => String::from("At"),
     Token::Apostrophe => String::from("Apostrophe"),
     Token::DoubleQuotes => String::from("DoubleQuotes"),
     Token::QuestionMark => String::from("QuestionMark"),
