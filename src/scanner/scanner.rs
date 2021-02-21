@@ -2,14 +2,12 @@ use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
 use std::fs;
 use std::io::Result;
-use std::ops::{Range, RangeInclusive};
 use std::path::Path;
 
 use predicates::{BoxPredicate, Predicate};
-use predicates::function::FnPredicate;
 use predicates::prelude::predicate::function;
 
-use crate::scanner::token::{escaped_char_to_char, parse_keyword, Token};
+use crate::scanner::token::{escaped_char_to_char, GriddedToken, parse_keyword, Token};
 use crate::scanner::token::Token::*;
 
 pub struct Scanner {
@@ -176,6 +174,8 @@ impl Scanner {
     self.position = self.peek;
   }
 
+  pub fn pos(&self) -> usize { self.position }
+
   pub fn pos_is_eof(&self) -> bool {
     self.position >= self.string.len()
   }
@@ -200,23 +200,46 @@ fn search_and_consume_tokens(scanner: &mut Scanner, tokens: Vec<(&str, Token)>) 
 }
 
 macro_rules! search_equal {
-    ( $scanner:expr, $equal:expr, $single:expr$(, $x:expr)*) => {
-        search_and_consume_tokens($scanner.borrow_mut(), vec![
-          $($x,)*
-          ("=", $equal)
-        ]).unwrap_or($single)
-    };
+  ( $scanner:expr, $equal:expr, $single:expr$(, $x:expr)*) => {
+      search_and_consume_tokens($scanner.borrow_mut(), vec![
+        $($x,)*
+        ("=", $equal)
+      ]).unwrap_or($single)
+  };
 }
 
-pub fn scan(path: &Path) -> Result<Box<Vec<Token>>> {
+macro_rules! post_set {
+  ($var:expr, $amount:expr) => {
+    {
+      let old_value = $var;
+      $var = $amount;
+      old_value
+    }
+  };
+}
+
+macro_rules! post_inc {
+  ($var:expr, $amount:expr) => {
+    {
+      let old_value = $var;
+      $var += $amount;
+      old_value
+    }
+  };
+}
+
+pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
   let mut scanner = match Scanner::new(path) {
     Err(err) => return Result::Err(err),
     Ok(s) => s
   };
-  let mut vec = Box::new(Vec::new());
+  let mut vec: Box<Vec<GriddedToken>> = Box::new(Vec::new());
+  let mut pos_temp = 0usize;
+  let mut pos_x = 0usize;
+  let mut pos_y = 0usize;
   while match scanner.consume_char() {
     Some(c) => {
-      vec.push(match *c {
+      vec.push(match match *c {
         '(' => LeftParen,
         ')' => RightParen,
         '{' => LeftBrace,
@@ -226,10 +249,10 @@ pub fn scan(path: &Path) -> Result<Box<Vec<Token>>> {
         ',' => Comma,
         '@' => At,
         '.' => Dot,
+        ';' => Semicolon,
         ':' => search_and_consume_tokens(scanner.borrow_mut(), vec![
           (":", ColonColon)
         ]).unwrap_or(Colon),
-        ';' => Semicolon,
         '-' => search_equal!(scanner, MinusEqual, Minus, (">", ArrowSimpleRight), ("-", MinusMinus)),
         '+' => search_equal!(scanner, PlusEqual, Plus, ("+", PlusPlus)),
         '/' => {
@@ -396,15 +419,31 @@ pub fn scan(path: &Path) -> Result<Box<Vec<Token>>> {
           }
         }
         other => Unknown(other.to_string())
+      } {
+        NewLine => GriddedToken::new(NewLine, {
+          post_set!(pos_temp, scanner.pos());
+          post_set!(pos_x, 0)
+        }, post_inc!(pos_y, 1)),
+        tok => GriddedToken::new(tok, {
+          let diff = scanner.pos() - post_set!(pos_temp, scanner.pos());
+          post_inc!(pos_x, diff)
+        }, pos_y)
       });
       true
     }
     None => {
-      vec.push(EOF);
+      // vec.push(EOF); Who needs this actually?
       false
     }
   } {
     scanner.peek_reset();
   }
   Ok(vec)
+}
+
+/**
+* Get rid of Spaces, NewLines and Unknown
+*/
+pub fn clean_up(vec: &mut Vec<GriddedToken>) {
+  vec.retain(|t| !matches!(t.token, Space(_) | NewLine | Unknown(_) | EOF))
 }

@@ -1,8 +1,19 @@
 use std::borrow::Borrow;
-use std::fs::read;
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
+
+pub struct GriddedToken {
+  pub token: Token,
+  pub pos_x: usize,
+  pub pos_y: usize,
+}
+
+impl GriddedToken {
+  pub fn new(token: Token, pos_x: usize, pos_y: usize) -> GriddedToken {
+    GriddedToken { token, pos_x, pos_y }
+  }
+}
 
 pub enum Token {
   /**
