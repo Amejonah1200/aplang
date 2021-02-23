@@ -209,23 +209,6 @@ fn search_and_consume_tokens(scanner: &mut Scanner<char>, tokens: Vec<(&str, Tok
   result
 }
 
-macro_rules! search_equal {
-  ( $scanner:expr, $equal:expr, $single:expr$(, $x:expr)*) => {
-      search_and_consume_tokens($scanner.borrow_mut(), vec![
-        $($x,)*
-        ("=", $equal)
-      ]).unwrap_or($single)
-  };
-}
-
-macro_rules! search_token {
-  ( $scanner:expr, $single:expr$(, $x:expr)*) => {
-      search_and_consume_tokens($scanner.borrow_mut(), vec![
-        $($x,)*
-      ]).unwrap_or($single)
-  };
-}
-
 #[macro_export]
 macro_rules! post_set {
   ($var:expr, $amount:expr) => {
@@ -255,6 +238,22 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
     Err(err) => { return Result::Err(err); }
   };
   let mut scanner = Scanner { position: 0, peek: 0, elements: &elemts };
+  macro_rules! search_equal {
+  ($equal:expr, $single:expr$(, $x:expr)*) => {
+      search_and_consume_tokens(scanner.borrow_mut(), vec![
+        $($x,)*
+        ("=", $equal)
+      ]).unwrap_or($single)
+  };
+}
+
+  macro_rules! search_token {
+  ($single:expr$(, $x:expr)*) => {
+      search_and_consume_tokens(scanner.borrow_mut(), vec![
+        $($x,)*
+      ]).unwrap_or($single)
+  };
+}
   let mut vec: Box<Vec<GriddedToken>> = Box::new(Vec::new());
   let mut pos_temp = 0usize;
   let mut pos_x = 0usize;
@@ -270,13 +269,11 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
         ']' => RightBracket,
         ',' => Comma,
         '@' => At,
-        '.' => search_token!(scanner, Dot, (".", DotDot), (".=", DotDotEqual)),
+        '.' => search_token!(Dot, (".", DotDot), (".=", DotDotEqual)),
         ';' => Semicolon,
-        ':' => search_and_consume_tokens(scanner.borrow_mut(), vec![
-          (":", ColonColon)
-        ]).unwrap_or(Colon),
-        '-' => search_equal!(scanner, MinusEqual, Minus, (">", ArrowSimpleRight), ("-", MinusMinus)),
-        '+' => search_equal!(scanner, PlusEqual, Plus, ("+", PlusPlus)),
+        ':' => search_token!(Colon,(":", ColonColon)),
+        '-' => search_equal!(MinusEqual, Minus, (">", ArrowSimpleRight), ("-", MinusMinus)),
+        '+' => search_equal!(PlusEqual, Plus, ("+", PlusPlus)),
         '/' => {
           if scanner.peek_search_char('/') {
             scanner.pos_adv(1);
@@ -297,7 +294,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
             } {}
             Comment(cmt)
           } else {
-            search_equal!(scanner, SlashEqual, Slash)
+            search_equal!(SlashEqual, Slash)
           }
         }
         '#' => HashTag,
@@ -306,18 +303,18 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
           NewLine
         } else { Unknown('\r'.to_string()) },
         '\n' => NewLine,
-        '~' => search_equal!(scanner, TildeEqual, Tilde),
-        '?' => search_equal!(scanner, QuestionMarkEqual, QuestionMark, (":", QuestionMarkColon)),
-        '%' => search_equal!(scanner, PercentageEqual, Percentage),
+        '~' => search_equal!(TildeEqual, Tilde),
+        '?' => search_equal!(QuestionMarkEqual, QuestionMark, (":", QuestionMarkColon)),
+        '%' => search_equal!(PercentageEqual, Percentage),
         '$' => Dollar,
-        '^' => search_equal!(scanner, CircumflexEqual, Circumflex),
-        '*' => search_equal!(scanner, StarEqual, Star, ("*", StarStar), ("*=", StarStarEqual)),
-        '|' => search_equal!(scanner, VerticalBarEqual, VerticalBar, ("|", DoubleVerticalBar)),
-        '&' => search_equal!(scanner, AmpersandEqual, Ampersand, ("&", AmpersandAmpersand)),
-        '!' => search_equal!(scanner, BangEqual, Bang),
-        '=' => search_equal!(scanner, EqualEqual, Equal, (">", ArrowDoubleRight)),
-        '>' => search_equal!(scanner, GreaterEqual, Greater, (">", GreaterGreater), (">>", GreaterGreaterGreater)),
-        '<' => search_equal!(scanner, LessEqual, Less, ("-", ArrowSimpleLeft),("<", LessLess)),
+        '^' => search_equal!(CircumflexEqual, Circumflex),
+        '*' => search_equal!(StarEqual, Star, ("*", StarStar), ("*=", StarStarEqual)),
+        '|' => search_equal!(VerticalBarEqual, VerticalBar, ("|", DoubleVerticalBar)),
+        '&' => search_equal!(AmpersandEqual, Ampersand, ("&", AmpersandAmpersand)),
+        '!' => search_equal!(BangEqual, Bang),
+        '=' => search_equal!(EqualEqual, Equal, (">", ArrowDoubleRight)),
+        '>' => search_equal!(GreaterEqual, Greater, (">", GreaterGreater), (">>", GreaterGreaterGreater)),
+        '<' => search_equal!(LessEqual, Less, ("-", ArrowSimpleLeft),("<", LessLess)),
         ' ' | '\t' => {
           let mut amount = 1;
           while match scanner.peek_char() {
