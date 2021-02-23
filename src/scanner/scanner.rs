@@ -239,21 +239,21 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
   };
   let mut scanner = Scanner { position: 0, peek: 0, elements: &elemts };
   macro_rules! search_equal {
-  ($equal:expr, $single:expr$(, $x:expr)*) => {
+    ($equal:expr, $single:expr$(, $x:expr)*) => {
       search_and_consume_tokens(scanner.borrow_mut(), vec![
         $($x,)*
         ("=", $equal)
       ]).unwrap_or($single)
-  };
-}
+    };
+  }
 
   macro_rules! search_token {
-  ($single:expr$(, $x:expr)*) => {
+    ($single:expr$(, $x:expr)*) => {
       search_and_consume_tokens(scanner.borrow_mut(), vec![
         $($x,)*
       ]).unwrap_or($single)
-  };
-}
+    };
+  }
   let mut vec: Box<Vec<GriddedToken>> = Box::new(Vec::new());
   let mut pos_temp = 0usize;
   let mut pos_x = 0usize;
@@ -359,7 +359,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
                 '\r' | '\n' => {
                   scanner.peek_reset();
                   false
-                } // TODO Errors
+                }
                 _ => {
                   str.push(*chr);
                   true
@@ -451,7 +451,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
       true
     }
     None => {
-      // vec.push(EOF); Who needs this actually?
+      vec.push(GriddedToken::new(EOF, pos_x, pos_y));
       false
     }
   } {
