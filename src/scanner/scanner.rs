@@ -10,52 +10,15 @@ use predicates::prelude::predicate::function;
 use crate::scanner::token::{escaped_char_to_char, GriddedToken, parse_keyword, Token};
 use crate::scanner::token::Token::*;
 
-pub struct Scanner {
+pub struct Scanner<'a, T> {
   position: usize,
   peek: usize,
-  string: Box<Vec<char>>,
+  elements: &'a Vec<T>,
 }
 
-impl Scanner {
-  pub fn new(path: &Path) -> Result<Self> {
-    let result = fs::read_to_string(path);
-    match result {
-      Ok(str) => {
-        Result::Ok(Scanner { position: 0, peek: 0, string: Box::new(str.chars().collect()) })
-      }
-      Err(err) => Result::Err(err)
-    }
-  }
-
-  pub fn next_search_chars(&mut self, consume: bool, use_peek: bool, predicate: BoxPredicate<char>) -> std::string::String {
-    let mut result = std::string::String::new();
-    let start_pos = if use_peek { self.peek } else { self.position };
-    let mut i = 0;
-    while match self.string.get(start_pos + i) {
-      Some(c) if predicate.eval(c) => {
-        result.push(*c);
-        true
-      }
-      _ => false
-    } { i += 1; }
-    self.next_adv(i, consume, use_peek);
-    result
-  }
-
-  pub fn next_chars(&mut self, mut nb: usize, consume: bool, use_peek: bool, fail_on_not_reach: bool) -> Option<std::string::String> {
-    let mut result = std::string::String::new();
-    let start_pos = if use_peek { self.peek } else { self.position };
-    for i in 0..nb {
-      match self.string.get(start_pos + i) {
-        Some(c) => result.push(*c),
-        None => if fail_on_not_reach { return None; } else {
-          nb = i;
-          break;
-        }
-      }
-    }
-    self.next_adv(nb, consume, use_peek);
-    Some(result)
+impl<'a, T> Scanner<'a, T> {
+  pub fn new(tokens_in: &'a Vec<T>) -> Self {
+    Scanner { position: 0, peek: 0, elements: tokens_in }
   }
 
   pub fn next_adv(&mut self, nb: usize, consume: bool, use_peek: bool) {
@@ -71,14 +34,123 @@ impl Scanner {
     }
   }
 
-  pub fn consume_char(&mut self) -> Option<&char> {
+  pub fn consume(&mut self) -> Option<&T> {
     let pos_old = self.position;
-    let result = self.string.get(pos_old);
+    let result = self.elements.get(pos_old);
     if result.is_some() {
       self.position += 1;
       self.peek = self.position;
     }
     result
+  }
+
+  pub fn peek(&mut self) -> Option<&T> {
+    let pos_peek = self.peek;
+    let result = self.elements.get(pos_peek);
+    if result.is_some() { self.peek += 1; }
+    result
+  }
+
+  pub fn peek_search_predicate(&mut self, predicate: BoxPredicate<T>) -> bool {
+    match self.peek() {
+      Some(peek) => predicate.eval(peek),
+      None => false
+    }
+  }
+
+  pub fn peek_adv(&mut self, nb: usize) {
+    if nb == 0 { return; }
+    if self.peek + nb < self.elements.len() {
+      self.peek += nb;
+    } else {
+      self.peek = self.elements.len();
+    }
+  }
+
+  pub fn peek_rewind(&mut self, nb: usize) {
+    if self.peek > nb {
+      self.peek -= nb;
+    } else {
+      self.peek = 0;
+    }
+  }
+
+  pub fn peek_reset(&mut self) {
+    self.peek = self.position;
+  }
+
+  pub fn peek_is_eof(&self) -> bool {
+    self.peek >= self.elements.len()
+  }
+
+  pub fn pos_adv(&mut self, nb: usize) {
+    if nb == 0 { return; }
+    if self.position + nb < self.elements.len() {
+      self.position += nb;
+    } else {
+      self.position = self.elements.len();
+    }
+    self.peek_reset();
+  }
+
+  pub fn pos_rewind(&mut self, nb: usize) {
+    if self.position > nb {
+      self.position -= nb;
+    } else {
+      self.position = 0;
+    }
+    self.peek_reset();
+  }
+
+  pub fn pos_reset(&mut self) {
+    self.position = 0;
+    self.peek_reset();
+  }
+
+  pub fn pos_to_peek(&mut self) {
+    if self.peek > self.elements.len() {
+      self.peek = self.elements.len();
+    }
+    self.position = self.peek;
+  }
+
+  pub fn pos_is_eof(&self) -> bool {
+    self.position >= self.elements.len()
+  }
+
+  pub fn pos(&self) -> usize { self.position }
+}
+
+impl<'a> Scanner<'a, char> {
+  pub fn next_search_chars(&mut self, consume: bool, use_peek: bool, predicate: BoxPredicate<char>) -> std::string::String {
+    let mut result = std::string::String::new();
+    let start_pos = if use_peek { self.peek } else { self.position };
+    let mut i = 0;
+    while match self.elements.get(start_pos + i) {
+      Some(c) if predicate.eval(c) => {
+        result.push(*c);
+        true
+      }
+      _ => false
+    } { i += 1; }
+    self.next_adv(i, consume, use_peek);
+    result
+  }
+
+  pub fn next_chars(&mut self, mut nb: usize, consume: bool, use_peek: bool, fail_on_not_reach: bool) -> Option<std::string::String> {
+    let mut result = std::string::String::new();
+    let start_pos = if use_peek { self.peek } else { self.position };
+    for i in 0..nb {
+      match self.elements.get(start_pos + i) {
+        Some(c) => result.push(*c),
+        None => if fail_on_not_reach { return None; } else {
+          nb = i;
+          break;
+        }
+      }
+    }
+    self.next_adv(nb, consume, use_peek);
+    Some(result)
   }
 
   pub fn consume_search_chars(&mut self, predicate: BoxPredicate<char>) -> std::string::String {
@@ -91,7 +163,7 @@ impl Scanner {
 
   pub fn peek_char(&mut self) -> Option<&char> {
     let pos_peek = self.peek;
-    let result = self.string.get(pos_peek);
+    let result = self.elements.get(pos_peek);
     if result.is_some() { self.peek += 1; }
     result
   }
@@ -117,75 +189,13 @@ impl Scanner {
   pub fn peek_search_chars(&mut self, predicate: BoxPredicate<char>) -> std::string::String {
     self.next_search_chars(false, true, predicate)
   }
-
-  pub fn peek_adv(&mut self, nb: usize) {
-    if nb == 0 { return; }
-    if self.peek + nb < self.string.len() {
-      self.peek += nb;
-    } else {
-      self.peek = self.string.len();
-    }
-  }
-
-  pub fn peek_rewind(&mut self, nb: usize) {
-    if self.peek > nb {
-      self.peek -= nb;
-    } else {
-      self.peek = 0;
-    }
-  }
-
-  pub fn peek_reset(&mut self) {
-    self.peek = self.position;
-  }
-
-  pub fn peek_is_eof(&self) -> bool {
-    self.peek >= self.string.len()
-  }
-
-  pub fn pos_adv(&mut self, nb: usize) {
-    if nb == 0 { return; }
-    if self.position + nb < self.string.len() {
-      self.position += nb;
-    } else {
-      self.position = self.string.len();
-    }
-    self.peek_reset();
-  }
-
-  pub fn pos_rewind(&mut self, nb: usize) {
-    if self.position > nb {
-      self.position -= nb;
-    } else {
-      self.position = 0;
-    }
-    self.peek_reset();
-  }
-
-  pub fn pos_reset(&mut self) {
-    self.position = 0;
-    self.peek_reset();
-  }
-
-  pub fn pos_to_peek(&mut self) {
-    if self.peek > self.string.len() {
-      self.peek = self.string.len();
-    }
-    self.position = self.peek;
-  }
-
-  pub fn pos(&self) -> usize { self.position }
-
-  pub fn pos_is_eof(&self) -> bool {
-    self.position >= self.string.len()
-  }
 }
 
 /**
 * Omit the first char, cuz it was already consumed in scan.
 * searches for the longest token, provide sorted tokens.
 */
-fn search_and_consume_tokens(scanner: &mut Scanner, tokens: Vec<(&str, Token)>) -> Option<Token> {
+fn search_and_consume_tokens(scanner: &mut Scanner<char>, tokens: Vec<(&str, Token)>) -> Option<Token> {
   let mut result = None;
   let mut nb_chars = 0;
   for t in tokens {
@@ -208,6 +218,15 @@ macro_rules! search_equal {
   };
 }
 
+macro_rules! search_token {
+  ( $scanner:expr, $single:expr$(, $x:expr)*) => {
+      search_and_consume_tokens($scanner.borrow_mut(), vec![
+        $($x,)*
+      ]).unwrap_or($single)
+  };
+}
+
+#[macro_export]
 macro_rules! post_set {
   ($var:expr, $amount:expr) => {
     {
@@ -218,6 +237,7 @@ macro_rules! post_set {
   };
 }
 
+#[macro_export]
 macro_rules! post_inc {
   ($var:expr, $amount:expr) => {
     {
@@ -229,15 +249,17 @@ macro_rules! post_inc {
 }
 
 pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
-  let mut scanner = match Scanner::new(path) {
-    Err(err) => return Result::Err(err),
-    Ok(s) => s
+  let string = fs::read_to_string(path);
+  let elemts = match string {
+    Ok(str) => str.chars().collect(),
+    Err(err) => { return Result::Err(err); }
   };
+  let mut scanner = Scanner { position: 0, peek: 0, elements: &elemts };
   let mut vec: Box<Vec<GriddedToken>> = Box::new(Vec::new());
   let mut pos_temp = 0usize;
   let mut pos_x = 0usize;
   let mut pos_y = 0usize;
-  while match scanner.consume_char() {
+  while match scanner.consume() {
     Some(c) => {
       vec.push(match match *c {
         '(' => LeftParen,
@@ -248,7 +270,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
         ']' => RightBracket,
         ',' => Comma,
         '@' => At,
-        '.' => Dot,
+        '.' => search_token!(scanner, Dot, (".", DotDot), (".=", DotDotEqual)),
         ';' => Semicolon,
         ':' => search_and_consume_tokens(scanner.borrow_mut(), vec![
           (":", ColonColon)
@@ -259,7 +281,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
           if scanner.peek_search_char('/') {
             scanner.pos_adv(1);
             let mut cmt = std::string::String::new();
-            while match scanner.consume_char() {
+            while match scanner.consume() {
               None => false,
               Some(chr) => match chr {
                 '\r' => !scanner.peek_search_char('\n'),
@@ -312,14 +334,14 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
           scanner.pos_adv(amount - 1);
           Space(amount)
         }
-        '\\' => match scanner.consume_char() {
+        '\\' => match scanner.consume() {
           Some(chr) => EscapedChar(*chr),
           None => Char('\\')
         },
         '"' => {
           let mut str = std::string::String::new();
           let mut result = None;
-          while match scanner.peek_char() {
+          while match scanner.peek() {
             Some(chr) => {
               match chr {
                 '\\' => {
@@ -385,7 +407,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
           let mut number = std::string::String::new();
           number.push(*c);
           let mut has_dot = false;
-          while match scanner.consume_char() {
+          while match scanner.consume() {
             Some(chr) => {
               match chr {
                 '0'..='9' | 'a'..='z' | 'A'..='Z' => {
@@ -445,5 +467,5 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
 * Get rid of Spaces, NewLines and Unknown
 */
 pub fn clean_up(vec: &mut Vec<GriddedToken>) {
-  vec.retain(|t| !matches!(t.token, Space(_) | NewLine | Unknown(_) | EOF))
+  vec.retain(|t| !matches!(t.token, Space(_) | NewLine | Unknown(_)))
 }

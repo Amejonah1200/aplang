@@ -42,7 +42,6 @@ pub enum Token {
   RightBracket,
 
   Comma,
-  Dot,
   Semicolon,
   Slash,
   HashTag,
@@ -122,6 +121,10 @@ pub enum Token {
   PlusPlus,
   Colon,
   ColonColon,
+
+  Dot,
+  DotDot,
+  DotDotEqual,
 
   /**
   * Arrow Double: ->
@@ -208,6 +211,8 @@ pub fn token_to_string(token: &Token) -> String {
     Token::RightBracket => String::from("RightBracket"),
     Token::Comma => String::from("Comma"),
     Token::Dot => String::from("Dot"),
+    Token::DotDot => String::from("DotDot"),
+    Token::DotDotEqual => String::from("DotDotEqual"),
     Token::Colon => String::from("Colon"),
     Token::ColonColon => String::from("ColonColon"),
     Token::Minus => String::from("Minus"),
@@ -268,6 +273,6 @@ pub fn token_to_string(token: &Token) -> String {
     Token::Comment(comment) => String::from("cmt: ") + comment,
     Token::EscapedChar(chr) => String::from("\\") + &chr.to_string(),
     Token::Identifier(id) => String::from("Id[\"") + id + "\"]",
-    Token::Keyword(kw) => String::from("Keyword[\"") + KEYWORDS.get(kw.to_usize().unwrap()).unwrap_or(&"?") + "\"]"
+    Token::Keyword(kw) => String::from("Keyword[\"") + KEYWORDS.get(kw.to_usize().unwrap()).unwrap_or(&"?") + "\"]",
   }
 }
