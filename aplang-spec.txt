@@ -1,0 +1,56 @@
+program        → (macro_annotation+ "\n\n")? declaration* EOF ;
+
+declaration    → class_decl | fun_decl | var_decl | statement ;
+
+visibility     → "prot" | "pub" | "pak" ;
+
+class_decl     → macro_annotation* visibility? "class" IDENTIFIER ( "<" IDENTIFIER ("," IDENTIFIER)* ">")?
+                 (":" IDENTIFIER ("," IDENTIFIER)*)? "{" macro_annotation* declaration* "}" ;
+fun_decl       → visibility? IDENTIFIER? function ;
+var_decl       → visibility? IDENTIFIER IDENTIFIER ( "=" expression )? ";" ;
+
+
+statement      → exp_stmt  | for_stmt  | if_stmt | return_stmt
+               | while_stmt | do_while | block_no_return ;
+
+exp_stmt       → expression ";" ;
+for_stmt       → "for" "(" ( var_decl | exp_stmt | ";" ) expression? ";" expression? ")" statement 
+               | "for" "(" IDENTIFIER ":" expression ")" statement ;
+if_stmt        → "if"  "(" expression  ")" statement ( "else" statement )? ;
+return_stmt    → "return" expression? ";" ;
+while_stmt     → "while" "(" expression ")" statement ;
+do_while       → "do" block_no_return "while" "(" expression ")" ";" ;
+block_no_return→ "{" declaration* "}" ;
+
+
+expression     → assignment ;
+assignment     → call ( "+" | "-" | "*" | "**" | "/" | "&" | "|" | "<<" | ">>" | ">>>" | "^" | "?")
+                 "=" assignment | if_ns_expr ;
+if_ns_expr     → logic_or "?:" expression                | if_expr       ;
+if_expr        → logic_or "?"  expression ":" expression | logic_or ;
+logic_or       → logic_and   (   "||" logic_and                       )* ;
+logic_and      → equality    (   "&&" equality                        )* ;
+equality       → comparison  ( ( "!=" | "=="              ) comparison)* ;
+comparison     → term        ( ( ">"  | ">=" | "<" | "<=" ) term      )* ;
+term           → factor      ( ( "-"  | "+"               ) factor    )* ;
+factor         → bit_op      ( ( "/"  | "*"  | "**"       ) bit_op    )* ;
+bit_op         → unary_left  ( ( "|"  | "^"  | "&"        ) unary_left)* ;
+unary_left     →               ( "!"  | "~"  ) unary_left | unary_left_op;
+unary_left_op  →               ( "--" | "++" ) unary_right| unary_right  ; 
+unary_right    → primary       ( "--" | "++" )            | call         ;
+call           → primary       ( "(" arguments? ")" | "." IDENTIFIER | array_clause* )* ;
+
+primary        → "true" | "false" | "self" | "super" | NUMBER | STRING
+               | IDENTIFIER | "(" expression ")" | block_return ;
+block_return   → "{" declaration* expression? "}" ;
+               
+function       → IDENTIFIER "(" parameters? ")" "{" declaration* expression? "}" ;
+parameters     → IDENTIFIER ":" IDENTIFIER ( "," IDENTIFIER ":" IDENTIFIER)* ;
+arguments      → expression ( "," expression )* ;
+
+array_clause   → "[" expression "]" ;
+macro_annotation → ("@" | "#") "[" 
+                   (IDENTIFIER ("." IDENTIFIER)*) // Path
+                   ("(" (IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING))
+                                     ("," IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING)))*
+                                    | IDENTIFIER ("," IDENTIFIER)* ) ")")? "]"
