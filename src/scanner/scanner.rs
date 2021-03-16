@@ -1,14 +1,10 @@
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cmp::Ordering;
-use std::fs;
-use std::io::Result;
-use std::path::Path;
 
 use predicates::{BoxPredicate, Predicate};
-use predicates::prelude::predicate::function;
 
-use crate::scanner::token::{escaped_char_to_char, GriddedToken, parse_keyword, Token};
-use crate::scanner::token::Token::*;
+use crate::scanner::token::GriddedToken;
+use crate::scanner::token::Token::EOF;
 
 pub struct Scanner<'a, T> {
   position: usize,
@@ -51,9 +47,18 @@ impl<'a, T> Scanner<'a, T> {
     result
   }
 
-  pub fn peek_search_predicate(&mut self, predicate: BoxPredicate<T>) -> bool {
+  pub fn peek_search_ignore<F1, F2>(&mut self, ignore: F1, predicate: F2) -> bool
+    where F1: Fn(&T) -> bool,
+          F2: Fn(&T) -> bool {
+    while self.peek_search_predicate(&ignore) {}
+    self.peek_rewind(1);
+    self.peek_search_predicate(&predicate)
+  }
+
+  pub fn peek_search_predicate<F>(&mut self, predicate: F) -> bool
+    where F: Fn(&T) -> bool {
     match self.peek() {
-      Some(peek) => predicate.eval(peek),
+      Some(peek) => predicate(peek),
       None => false
     }
   }
@@ -118,7 +123,20 @@ impl<'a, T> Scanner<'a, T> {
     self.position >= self.elements.len()
   }
 
-  pub fn pos(&self) -> usize { self.position }
+  pub fn pos_get(&self) -> usize { self.position }
+  pub fn pos_set(&mut self, pos: usize) {
+    if pos < self.elements.len() {
+      self.position = pos;
+    }
+    self.peek_reset();
+  }
+
+  pub fn peek_get(&self) -> usize { self.peek }
+  pub fn peek_set(&mut self, peek: usize) {
+    if peek < self.elements.len() {
+      self.peek = peek;
+    }
+  }
 }
 
 impl<'a> Scanner<'a, char> {
@@ -191,278 +209,47 @@ impl<'a> Scanner<'a, char> {
   }
 }
 
-/**
-* Omit the first char, cuz it was already consumed in scan.
-* searches for the longest token, provide sorted tokens.
-*/
-fn search_and_consume_tokens(scanner: &mut Scanner<char>, tokens: Vec<(&str, Token)>) -> Option<Token> {
-  let mut result = None;
-  let mut nb_chars = 0;
-  for t in tokens {
-    if nb_chars < t.0.len() && scanner.peek_search(t.0) {
-      result = Some(t.1);
-      nb_chars = t.0.len();
+impl<'a> Scanner<'a, GriddedToken> {
+  pub fn peek_or_eof(&mut self) -> &GriddedToken {
+    let size = self.elements.len();
+    if size == 0 { panic!("A gridded token vec should at least containing an EOF Token."); }
+    let result = self.elements.get(self.peek);
+    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+      self.peek += 1;
     }
-    scanner.peek_reset();
-  }
-  if result.is_some() { scanner.pos_adv(nb_chars); }
-  result
-}
-
-#[macro_export]
-macro_rules! post_set {
-  ($var:expr, $amount:expr) => {
-    {
-      let old_value = $var;
-      $var = $amount;
-      old_value
-    }
-  };
-}
-
-#[macro_export]
-macro_rules! post_inc {
-  ($var:expr, $amount:expr) => {
-    {
-      let old_value = $var;
-      $var += $amount;
-      old_value
-    }
-  };
-}
-
-pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
-  let string = fs::read_to_string(path);
-  let elemts = match string {
-    Ok(str) => str.chars().collect(),
-    Err(err) => { return Result::Err(err); }
-  };
-  let mut scanner = Scanner { position: 0, peek: 0, elements: &elemts };
-  macro_rules! search_equal {
-    ($equal:expr, $single:expr$(, $x:expr)*) => {
-      search_and_consume_tokens(scanner.borrow_mut(), vec![
-        $($x,)*
-        ("=", $equal)
-      ]).unwrap_or($single)
-    };
+    result.expect("A gridded token vec should terminate with an EOF Token.")
   }
 
-  macro_rules! search_token {
-    ($single:expr$(, $x:expr)*) => {
-      search_and_consume_tokens(scanner.borrow_mut(), vec![
-        $($x,)*
-      ]).unwrap_or($single)
-    };
-  }
-  let mut vec: Box<Vec<GriddedToken>> = Box::new(Vec::new());
-  let mut pos_temp = 0usize;
-  let mut pos_x = 0usize;
-  let mut pos_y = 0usize;
-  while match scanner.consume() {
-    Some(c) => {
-      vec.push(match match *c {
-        '(' => LeftParen,
-        ')' => RightParen,
-        '{' => LeftBrace,
-        '}' => RightBrace,
-        '[' => LeftBracket,
-        ']' => RightBracket,
-        ',' => Comma,
-        '@' => At,
-        '.' => search_token!(Dot, (".", DotDot), (".=", DotDotEqual)),
-        ';' => Semicolon,
-        ':' => search_token!(Colon,(":", ColonColon)),
-        '-' => search_equal!(MinusEqual, Minus, (">", ArrowSimpleRight), ("-", MinusMinus)),
-        '+' => search_equal!(PlusEqual, Plus, ("+", PlusPlus)),
-        '/' => {
-          if scanner.peek_search_char('/') {
-            scanner.pos_adv(1);
-            let mut cmt = std::string::String::new();
-            while match scanner.consume() {
-              None => false,
-              Some(chr) => match chr {
-                '\r' => !scanner.peek_search_char('\n'),
-                '\n' => {
-                  scanner.pos_rewind(1);
-                  false
-                }
-                chr => {
-                  cmt.push(*chr);
-                  true
-                }
-              }
-            } {}
-            Comment(cmt)
-          } else {
-            search_equal!(SlashEqual, Slash)
-          }
-        }
-        '#' => HashTag,
-        '\r' => if scanner.peek_search_char('\n') {
-          scanner.pos_to_peek();
-          NewLine
-        } else { Unknown('\r'.to_string()) },
-        '\n' => NewLine,
-        '~' => search_equal!(TildeEqual, Tilde),
-        '?' => search_equal!(QuestionMarkEqual, QuestionMark, (":", QuestionMarkColon)),
-        '%' => search_equal!(PercentageEqual, Percentage),
-        '$' => Dollar,
-        '^' => search_equal!(CircumflexEqual, Circumflex),
-        '*' => search_equal!(StarEqual, Star, ("*", StarStar), ("*=", StarStarEqual)),
-        '|' => search_equal!(VerticalBarEqual, VerticalBar, ("|", DoubleVerticalBar)),
-        '&' => search_equal!(AmpersandEqual, Ampersand, ("&", AmpersandAmpersand)),
-        '!' => search_equal!(BangEqual, Bang),
-        '=' => search_equal!(EqualEqual, Equal, (">", ArrowDoubleRight)),
-        '>' => search_equal!(GreaterEqual, Greater, (">", GreaterGreater), (">>", GreaterGreaterGreater)),
-        '<' => search_equal!(LessEqual, Less, ("-", ArrowSimpleLeft),("<", LessLess)),
-        ' ' | '\t' => {
-          let mut amount = 1;
-          while match scanner.peek_char() {
-            Some(chr) => {
-              if *chr == ' ' || *chr == '\t' {
-                amount += 1;
-                true
-              } else {
-                false
-              }
-            }
-            None => false
-          } {}
-          scanner.pos_adv(amount - 1);
-          Space(amount)
-        }
-        '\\' => match scanner.consume() {
-          Some(chr) => EscapedChar(*chr),
-          None => Char('\\')
-        },
-        '"' => {
-          let mut str = std::string::String::new();
-          let mut result = None;
-          while match scanner.peek() {
-            Some(chr) => {
-              match chr {
-                '\\' => {
-                  match escaped_char_to_char(EscapedChar(*scanner.peek_char().unwrap_or('a'.borrow()))) {
-                    Some(esc_chr) => str.push(esc_chr),
-                    None => {
-                      str.push('\\');
-                      scanner.peek_rewind(1)
-                    }
-                  }
-                  true
-                }
-                '\"' => {
-                  result.replace(String(str.to_string()));
-                  scanner.pos_to_peek();
-                  false
-                }
-                '\r' | '\n' => {
-                  scanner.peek_reset();
-                  false
-                }
-                _ => {
-                  str.push(*chr);
-                  true
-                }
-              }
-            }
-            None => false
-          } {}
-          result.unwrap_or(DoubleQuotes)
-        }
-        '\'' => {
-          let mut result = None;
-          match scanner.peek_char() {
-            Some(chr) => {
-              let idk_how_to_name = *chr;
-              if *chr == '\\' {
-                match scanner.peek_char() {
-                  Some(chr2) => {
-                    let chr_2_esc = *chr2;
-                    if scanner.peek_search_char('\'') {
-                      match escaped_char_to_char(EscapedChar(chr_2_esc)) {
-                        Some(esc_chr) => {
-                          result.replace(Char(esc_chr));
-                          scanner.pos_to_peek();
-                        }
-                        _ => {}
-                      }
-                    }
-                  }
-                  _ => {}
-                }
-              } else if scanner.peek_search_char('\'') {
-                result.replace(Char(idk_how_to_name));
-                scanner.pos_to_peek();
-              }
-            }
-            _ => {}
-          }
-          result.unwrap_or(Apostrophe)
-        }
-        '0'..='9' => {
-          let mut number = std::string::String::new();
-          number.push(*c);
-          let mut has_dot = false;
-          while match scanner.consume() {
-            Some(chr) => {
-              match chr {
-                '0'..='9' | 'a'..='z' | 'A'..='Z' => {
-                  number.push(*chr);
-                  true
-                }
-                '.' if !has_dot => {
-                  if ('0'..='9').contains(scanner.peek_char().unwrap_or('a'.borrow())) {
-                    has_dot = true;
-                    number.push('.');
-                    true
-                  } else { false }
-                }
-                _ => {
-                  scanner.pos_rewind(1);
-                  false
-                }
-              }
-            }
-            None => false
-          } {}
-          Number(number)
-        }
-        'a'..='z' | 'A'..='Z' | '_' => {
-          let mut word = std::string::String::new();
-          word.push(*c);
-          word.push_str(scanner.consume_search_chars(BoxPredicate::new(function(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '$' | '_')))).as_str());
-          match parse_keyword(&word) {
-            Some(kw) => Keyword(kw),
-            None => Identifier(word)
-          }
-        }
-        other => Unknown(other.to_string())
-      } {
-        NewLine => GriddedToken::new(NewLine, {
-          post_set!(pos_temp, scanner.pos());
-          post_set!(pos_x, 0)
-        }, post_inc!(pos_y, 1)),
-        tok => GriddedToken::new(tok, {
-          let diff = scanner.pos() - post_set!(pos_temp, scanner.pos());
-          post_inc!(pos_x, diff)
-        }, pos_y)
-      });
-      true
+  pub fn peek_rewind_not_eof(&mut self, amount: usize) {
+    let result = self.elements.get(self.peek);
+    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+      if amount < self.peek {
+        self.peek -= amount;
+      } else {
+        self.peek = 0;
+      }
     }
-    None => {
-      vec.push(GriddedToken::new(EOF, pos_x, pos_y));
-      false
-    }
-  } {
-    scanner.peek_reset();
   }
-  Ok(vec)
-}
 
-/**
-* Get rid of Spaces, NewLines and Unknown
-*/
-pub fn clean_up(vec: &mut Vec<GriddedToken>) {
-  vec.retain(|t| !matches!(t.token, Space(_) | NewLine | Unknown(_)))
+  pub fn consume_or_eof(&mut self) -> &GriddedToken {
+    let size = self.elements.len();
+    if size == 0 { panic!("A gridded token vec should at least containing an EOF Token."); }
+    let result = self.elements.get(self.position);
+    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+      self.peek += 1;
+    }
+    result.expect("A gridded token vec should terminate with an EOF Token.")
+  }
+
+  pub fn consume_rewind_not_eof(&mut self, amount: usize) {
+    let result = self.elements.get(self.position);
+    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+      if amount < self.position {
+        self.position -= amount;
+      } else {
+        self.position = 0;
+      }
+      self.peek_reset();
+    }
+  }
 }
