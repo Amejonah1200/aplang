@@ -5,6 +5,7 @@ use crate::scanner::token::{Token, token_to_string, GriddedToken};
 use crate::scanner::parser::clean_up;
 
 mod scanner;
+mod ast;
 
 fn main() {
   let args: Vec<String> = env::args().collect();
