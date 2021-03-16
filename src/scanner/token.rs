@@ -1,8 +1,10 @@
 use std::borrow::Borrow;
+use std::fmt::{Display, Formatter};
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+#[derive(Debug, Clone)]
 pub struct GriddedToken {
   pub token: Token,
   pub pos_x: usize,
@@ -15,6 +17,13 @@ impl GriddedToken {
   }
 }
 
+impl Display for GriddedToken {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    write!(f, "{} [{} {}]", self.token, self.pos_x, self.pos_y)
+  }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Token {
   /**
   * Parenthesis: (
@@ -107,6 +116,12 @@ pub enum Token {
   TildeEqual,
   // ^
   PercentageEqual, // %
+  // <<
+  LessLessEqual,
+  // >>
+  GreaterGreaterEqual,
+  // >>>
+  GreaterGreaterGreaterEqual,
 
   Greater,
   GreaterGreater,
@@ -155,29 +170,38 @@ pub enum Token {
   EOF,
 }
 
-pub const KEYWORDS: [&str; 15] = ["var", "if", "while", "for", "pub", "pak", "prot", "chr", "str", "const", "int", "float", "double", "long", "bool"];
+pub const KEYWORDS: [&str; 18] = ["if", "while", "for", "var", "pub", "pak", "prot", "const", "chr", "str", "int", "float", "double", "long", "bool", "class", "super", "self"];
 
-#[derive(FromPrimitive, ToPrimitive)]
+#[derive(FromPrimitive, ToPrimitive, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Keyword {
-  Var,
+  // flow
   If,
   While,
   For,
+  // var
+  Var,
+  // visibility
   Pub,
   Pak,
   Prot,
+  // final
+  Const,
+  // data
   Chr,
   Str,
-  Const,
   Int,
   Float,
   Double,
   Long,
   Bool,
+  // structs
+  Class,
+  Super,
+  SelfKey,
 }
 
 pub fn parse_keyword(str: &std::string::String) -> Option<Keyword> {
-  for i in 0..15 {
+  for i in 0..KEYWORDS.len() {
     if str.cmp(KEYWORDS.get(i).unwrap().to_string().borrow()) == core::cmp::Ordering::Equal {
       return Some(Keyword::from_usize(i).unwrap());
     }
@@ -198,6 +222,12 @@ pub fn escaped_char_to_char(token: Token) -> Option<char> {
       _ => None
     }
     _ => None
+  }
+}
+
+impl Display for Token {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    write!(f, "{}", token_to_string(self))
   }
 }
 
@@ -262,6 +292,9 @@ pub fn token_to_string(token: &Token) -> String {
     Token::StarEqual => String::from("StarEqual"),
     Token::StarStarEqual => String::from("StarStarEqual"),
     Token::SlashEqual => String::from("SlashEqual"),
+    Token::LessLessEqual => String::from("LessLessEqual"),
+    Token::GreaterGreaterEqual => String::from("GreaterGreaterEqual"),
+    Token::GreaterGreaterGreaterEqual => String::from("GreaterGreaterGreaterEqual"),
     Token::CircumflexEqual => String::from("CircumflexEqual"),
     Token::AmpersandEqual => String::from("AmpersandEqual"),
     Token::VerticalBarEqual => String::from("VerticalBarEqual"),
