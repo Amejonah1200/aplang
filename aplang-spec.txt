@@ -1,33 +1,28 @@
 program        → (macro_annotation+ "\n\n")? declaration* EOF ;
 
-declaration    → class_decl | fun_decl | var_decl | statement ;
+declaration    → class_decl | fun_decl | var_decl ;
 
 visibility     → "prot" | "pub" | "pak" ;
 
-class_decl     → macro_annotation* visibility? "class" IDENTIFIER ( "<" IDENTIFIER ("," IDENTIFIER)* ">")?
-                 (":" IDENTIFIER ("," IDENTIFIER)*)? "{" macro_annotation* declaration* "}" ;
-fun_decl       → visibility? IDENTIFIER? function ;
-var_decl       → visibility? IDENTIFIER IDENTIFIER ( "=" expression )? ";" ;
+class_decl     → macro_annotation* visibility? "class" IDENTIFIER ( "<" type ("," type)* ">")?
+                 (":" type ("," type)*)? "{" macro_annotation* declaration* "}" ;
+fun_decl       → macro_annotation* visibility? generics? type? function ;
+var_decl       → macro_annotation* visibility? type IDENTIFIER ( "=" expression )? ";" ;
 
-
-statement      → exp_stmt  | for_stmt  | if_stmt | return_stmt
-               | while_stmt | do_while | block_no_return ;
-
-exp_stmt       → expression ";" ;
-for_stmt       → "for" "(" ( var_decl | exp_stmt | ";" ) expression? ";" expression? ")" statement 
+statement      → for_stmt  | if_stmt | return_stmt | while_stmt | do_while | block | exp_stmt ;
+for_stmt       → "for" "(" ( var_decl | exp_stmt | ";" )? expression? ";" expression? ")" statement 
                | "for" "(" IDENTIFIER ":" expression ")" statement ;
 if_stmt        → "if"  "(" expression  ")" statement ( "else" statement )? ;
 return_stmt    → "return" expression? ";" ;
 while_stmt     → "while" "(" expression ")" statement ;
-do_while       → "do" block_no_return "while" "(" expression ")" ";" ;
-block_no_return→ "{" declaration* "}" ;
-
+do_while       → "do" block "while" "(" expression ")" ";" ;
+exp_stmt       → expression ";" ;
 
 expression     → assignment ;
 assignment     → call ( "+" | "-" | "*" | "**" | "/" | "&" | "|" | "<<" | ">>" | ">>>" | "^" | "?")
                  "=" assignment | if_ns_expr ;
 if_ns_expr     → logic_or "?:" expression                | if_expr       ;
-if_expr        → logic_or "?"  expression ":" expression | logic_or ;
+if_expr        → logic_or "?"  expression ":" expression | logic_or      ;
 logic_or       → logic_and   (   "||" logic_and                       )* ;
 logic_and      → equality    (   "&&" equality                        )* ;
 equality       → comparison  ( ( "!=" | "=="              ) comparison)* ;
@@ -35,22 +30,25 @@ comparison     → term        ( ( ">"  | ">=" | "<" | "<=" ) term      )* ;
 term           → factor      ( ( "-"  | "+"               ) factor    )* ;
 factor         → bit_op      ( ( "/"  | "*"  | "**"       ) bit_op    )* ;
 bit_op         → unary_left  ( ( "|"  | "^"  | "&"        ) unary_left)* ;
-unary_left     →               ( "!"  | "~"  ) unary_left | unary_left_op;
-unary_left_op  →               ( "--" | "++" ) unary_right| unary_right  ; 
-unary_right    → primary       ( "--" | "++" )            | call         ;
-call           → primary       ( "(" arguments? ")" | "." IDENTIFIER | array_clause* )* ;
+unary_left     →               ( "!"  | "~"  ) unary_left | unary_right  ;
+unary_right    → primary       ( "--" | "++" ) ( NUMBER | "(" expression ")" ) | call  ;
+call           → primary       ( "(" arguments? ")" | "." IDENTIFIER | array_clause )* ;
 
-primary        → "true" | "false" | "self" | "super" | NUMBER | STRING
-               | IDENTIFIER | "(" expression ")" | block_return ;
-block_return   → "{" declaration* expression? "}" ;
+primary        → LITERAL | "self" | "super" | IDENTIFIER | lambda | "(" expression ")" | block ;
                
 function       → IDENTIFIER "(" parameters? ")" "{" declaration* expression? "}" ;
-parameters     → IDENTIFIER ":" IDENTIFIER ( "," IDENTIFIER ":" IDENTIFIER)* ;
+parameters     → IDENTIFIER ":" type ( "," IDENTIFIER ":" type)* ;
 arguments      → expression ( "," expression )* ;
+block          → "{" (var_decl | statement)* expression? "}" ;
+type           → path generics ;
+path           → IDENTIFIER ( "." IDENTIFIER)* ;
+generics       → "<" type? ("," type)* ">" ;
+lambda         → "(" IDENTIFIER? ("," IDENTIFIER)* ")" "->" expression ;
+LITERAL        → "true" | "false" | NUMBER | STRING | CHAR
+NUMBER         → "0"-"9" ("." "0"-"9")? ( PREFIX )
 
 array_clause   → "[" expression "]" ;
-macro_annotation → ("@" | "#") "[" 
-                   (IDENTIFIER ("." IDENTIFIER)*) // Path
-                   ("(" (IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING))
-                                     ("," IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING)))*
-                                    | IDENTIFIER ("," IDENTIFIER)* ) ")")? "]"
+macro_annotation → ("@" | "#") "[" path
+                   ("(" ( IDENTIFIER ("=" LITERAL) ("," IDENTIFIER ("=" LITERAL))*
+                        | IDENTIFIER ("," IDENTIFIER)* )
+                    ")")? "]" ;
