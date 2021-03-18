@@ -1,7 +1,7 @@
 use std::env;
 use std::path::Path;
 
-use crate::scanner::token::{Token, token_to_string, GriddedToken};
+use crate::scanner::token::{Token, token_to_string, GriddedObject};
 use crate::scanner::parser::clean_up;
 
 mod scanner;
@@ -20,18 +20,18 @@ fn main() {
       clean_up(vec.as_mut());
       // print_vec(&vec);
       println!("AST:");
-      println!("{:#?}", ast::ast::ast(&vec));
+      println!("{:#?}", ast::ast::ast_build(&vec));
     }
     Err(err) => println!("{}", err.to_string())
   }
 }
 
-fn print_vec(vec: &Box<Vec<GriddedToken>>) {
+fn print_vec(vec: &Box<Vec<GriddedObject<Token>>>) {
   for t in vec.iter() {
-    match (*t).token {
+    match (*t).obj {
       Token::Unknown(_) => {}
       Token::NewLine => print!("\n"),
-      _ => print!("[{} ({} {})]", token_to_string(&t.token), t.pos_x, t.pos_y)
+      _ => print!("[{} ({} {})]", token_to_string(&t.obj), t.start_pos_x, t.start_pos_y)
     }
   }
   println!()

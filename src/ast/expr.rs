@@ -1,18 +1,19 @@
 use std::collections::HashMap;
 
-use crate::scanner::token::Token;
+use crate::scanner::token::{Token, GriddedObject};
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
 pub enum Expression {
   /**
   * program        → (macro_annotation+ "\n\n")? declaration* EOF ;
   */
-  Program(Vec<Expression>, Vec<Expression>),
+  Program(Vec<GriddedObject<Expression>>, Vec<GriddedObject<Expression>>),
 
   /**
   * declaration    → class_decl | fun_decl | var_decl | statement ;
   */
-  Declaration(Box<Expression>),
+  Declaration(Box<GriddedObject<Expression>>),
 
   /**
   * visibility     → "prot" | "pub" | "pak"
@@ -31,18 +32,18 @@ pub enum Expression {
   /**
   * var_decl       → visibility? IDENTIFIER IDENTIFIER ( "=" expression )? ";"
   */
-  VarDecl(Option<Visibility>, Token, Token, Option<Box<Expression>>),
+  VarDecl(Option<Visibility>, Token, Token, Option<Box<GriddedObject<Expression>>>),
 
   /**
   * statement      → exp_stmt  | for_stmt  | if_stmt | return_stmt
   *                | while_stmt | do_while | block_no_return ;
   */
-  Statement(Box<Expression>),
+  Statement(Box<GriddedObject<Expression>>),
 
   /**
   * expr_stmt      → expression ";" ;
   */
-  ExprStmt(Box<Expression>),
+  ExprStmt(Box<GriddedObject<Expression>>),
   /**
   * for_stmt       → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement
   *                | "for" "(" IDENTIFIER ":" expression ")" statement
@@ -52,23 +53,23 @@ pub enum Expression {
   * if_stmt        → "if" "(" expression ")" statement
   *                  ( "else" statement )?
   */
-  IfStmt(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+  IfStmt(Box<GriddedObject<Expression>>, Box<GriddedObject<Expression>>, Option<Box<GriddedObject<Expression>>>),
   /**
   * return_stmt    → "return" expression? ";"
   */
-  ReturnStmt(Option<Box<Expression>>),
+  ReturnStmt(Option<Box<GriddedObject<Expression>>>),
   /**
   * while_stmt     → "while" "(" expression ")" statement
   */
-  WhileStmt(Box<Expression>, Box<Expression>),
+  WhileStmt(Box<GriddedObject<Expression>>, Box<GriddedObject<Expression>>),
   /**
   * do_while       → "do" block_no_return "while" "(" expression ")" ";" 
   */
-  DoWhile(Box<Expression>, Box<Expression>),
+  DoWhile(Box<GriddedObject<Expression>>, Box<GriddedObject<Expression>>),
   /**
   * block_no_return→ "{" declaration* "}" 
   */
-  BlockNoReturn(Vec<Expression>),
+  BlockNoReturn(Vec<GriddedObject<Expression>>),
 
   /*
   * expression     → assignment 
@@ -78,43 +79,43 @@ pub enum Expression {
   * assignment     → call ( "+" | "-" | "*" | "**" | "/" | "&" | "|" | "<<" | ">>" | ">>>" | "^" | "?")
   *               "=" assignment | if_ns_expr ;
   */
-  Assignment(Box<Expression>, Token, Box<Expression>),
+  Assignment(Box<GriddedObject<Expression>>, Token, Box<GriddedObject<Expression>>),
   /**
   * if_ns_expr     → logic_or "?:" expression                | if_expr       
   */
-  IfNsExpr(Box<Expression>, Box<Expression>),
+  IfNsExpr(Box<GriddedObject<Expression>>, Box<GriddedObject<Expression>>),
   /**
   * if_expr        → logic_or "?"  expression ":" expression | unary_left_op 
   */
-  IfExpr(Box<Expression>, Box<Expression>, Box<Expression>),
+  IfExpr(Box<GriddedObject<Expression>>, Box<GriddedObject<Expression>>, Box<GriddedObject<Expression>>),
   /**
   * logic_or       → logic_and   (   "||" logic_and                       )* 
   */
-  LogicOr(Box<Expression>, Vec<Expression>),
+  LogicOr(Box<GriddedObject<Expression>>, Vec<GriddedObject<Expression>>),
   /**
   * logic_and      → equality    (   "&&" equality                        )* 
   */
-  LogicAnd(Box<Expression>, Vec<Expression>),
+  LogicAnd(Box<GriddedObject<Expression>>, Vec<GriddedObject<Expression>>),
   /**
   * equality       → comparison  ( ( "!=" | "=="              ) comparison)* 
   */
-  Equality(Box<Expression>, Vec<Unary>),
+  Equality(Box<GriddedObject<Expression>>, Vec<Unary>),
   /**
   * comparison     → term        ( ( ">"  | ">=" | "<" | "<=" ) term      )* 
   */
-  Comparison(Box<Expression>, Vec<Unary>),
+  Comparison(Box<GriddedObject<Expression>>, Vec<Unary>),
   /**
   * term           → factor      ( ( "-"  | "+"               ) factor    )* 
   */
-  Term(Box<Expression>, Vec<Unary>),
+  Term(Box<GriddedObject<Expression>>, Vec<Unary>),
   /**
   * factor         → bit_op      ( ( "/"  | "\*"  | "\*\*"       ) bit_op    )*
   */
-  Factor(Box<Expression>, Vec<Unary>),
+  Factor(Box<GriddedObject<Expression>>, Vec<Unary>),
   /**
   * bit_op         → unary_left  ( ( "|"  | "^"  | "&"        ) unary_left)* 
   */
-  BitOp(Box<Expression>, Vec<Unary>),
+  BitOp(Box<GriddedObject<Expression>>, Vec<Unary>),
   /**
   * unary_left     →               ( "!"  | "~"  ) unary_left | unary_left_op
   */
@@ -130,7 +131,7 @@ pub enum Expression {
   /**
   * call           → primary       ( "(" arguments? ")" | "." IDENTIFIER  )* 
   */
-  Call(Box<Expression>, Vec<Call>),
+  Call(Box<GriddedObject<Expression>>, Vec<Call>),
 
   /**
   * primary        → "true" | "false" | "this" | "super" | NUMBER | STRING
@@ -140,19 +141,19 @@ pub enum Expression {
   /**
   * block_return   → "{" declaration* expression "}" 
   */
-  BlockReturn(Vec<Expression>, Box<Expression>),
+  BlockReturn(Vec<GriddedObject<Expression>>, Box<GriddedObject<Expression>>),
   /**
   * function       → IDENTIFIER "(" parameters? ")" "{" declaration* expression? "}" 
   */
-  Function(Token, Option<Box<Expression>>),
+  Function(Token, Option<Box<GriddedObject<Expression>>>),
   /**
   * parameters     → IDENTIFIER ":" IDENTIFIER ( "," IDENTIFIER ":" IDENTIFIER)* 
   */
-  Parameters(Token, Token, Vec<Expression>),
+  Parameters(Token, Token, Vec<GriddedObject<Expression>>),
   /**
   * arguments      → expression ( "," expression )* 
   */
-  Arguments(Vec<Expression>),
+  Arguments(Vec<GriddedObject<Expression>>),
   /**
   * macro_annotation → ("@" | "#") "[" IDENTIFIER ("." IDENTIFIER)*
   *                    ("(" (IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING))
@@ -164,6 +165,12 @@ pub enum Expression {
   * Used only to satisfy the compiler.
   */
   Error,
+}
+
+impl Display for Expression {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    write!(f, "{}", self)
+  }
 }
 
 
@@ -178,40 +185,40 @@ pub struct MacroAnnotation {
 #[derive(Debug)]
 pub enum Primary {
   Literal(Token),
-  BoxedExpr(Box<Expression>),
-  Block(Box<Expression>),
+  BoxedExpr(Box<GriddedObject<Expression>>),
+  Block(Box<GriddedObject<Expression>>),
 }
 
 #[derive(Debug)]
 pub enum Call {
-  Arguments(Vec<Expression>),
+  Arguments(Vec<GriddedObject<Expression>>),
   Id(Token),
-  ArrayClause(Expression),
+  ArrayClause(GriddedObject<Expression>),
 }
 
 #[derive(Debug)]
 pub enum For {
-  ForStmt(Box<Expression>, Option<Box<Expression>>, Option<Box<Expression>>, Box<Expression>),
-  ForItrStmt(Token, Box<Expression>),
+  ForStmt(Box<GriddedObject<Expression>>, Option<Box<GriddedObject<Expression>>>, Option<Box<GriddedObject<Expression>>>, Box<GriddedObject<Expression>>),
+  ForItrStmt(Token, Box<GriddedObject<Expression>>),
 }
 
 #[derive(Debug)]
 pub struct Comparison {
   pub sign: Token,
-  pub comparison: Expression,
+  pub comparison: GriddedObject<Expression>,
 }
 
 #[derive(Debug)]
 pub struct Unary {
   pub op: Token,
-  pub expr: Box<Expression>,
+  pub expr: Box<GriddedObject<Expression>>,
 }
 
 #[derive(Debug)]
 pub struct Binary {
-  pub right: Expression,
+  pub right: GriddedObject<Expression>,
   pub op: Token,
-  pub left: Expression,
+  pub left: GriddedObject<Expression>,
 }
 
 #[derive(Debug)]

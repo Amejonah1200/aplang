@@ -1,25 +1,57 @@
 use std::borrow::Borrow;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+use crate::ast::expr::Expression;
+use crate::scanner::token::Token::NewLine;
+
 #[derive(Debug, Clone)]
-pub struct GriddedToken {
-  pub token: Token,
-  pub pos_x: usize,
-  pub pos_y: usize,
+pub struct GriddedObject<T> {
+  pub rect: bool,
+  pub start_pos_x: usize,
+  pub start_pos_y: usize,
+  pub obj: T,
+  pub end_pos_x: usize,
+  pub end_pos_y: usize,
 }
 
-impl GriddedToken {
-  pub fn new(token: Token, pos_x: usize, pos_y: usize) -> GriddedToken {
-    GriddedToken { token, pos_x, pos_y }
+impl<T> GriddedObject<T> {
+  pub fn new_point(obj: T, pos_x: usize, pos_y: usize) -> Self {
+    GriddedObject { rect: false, start_pos_x: pos_x, start_pos_y: pos_y, obj, end_pos_x: pos_x, end_pos_y: pos_y }
+  }
+
+  pub fn new_point_array(obj: T, pos: [usize; 2]) -> Self {
+    GriddedObject::new_point(obj, pos[0], pos[1])
+  }
+
+  pub fn new_rect(start_pos_x: usize, start_pos_y: usize, obj: T, end_pos_x: usize, end_pos_y: usize) -> Self {
+    GriddedObject { rect: false, start_pos_x, start_pos_y, obj, end_pos_x, end_pos_y }
+  }
+
+  pub fn new_rect_array(start_pos: [usize; 2], obj: T, end_pos: [usize; 2]) -> Self {
+    GriddedObject { rect: false, start_pos_x: start_pos[0], start_pos_y: start_pos[1], obj, end_pos_x: end_pos[0], end_pos_y: end_pos[1] }
+  }
+
+  pub fn start_pos(&self) -> [usize; 2] {
+    [self.start_pos_x, self.start_pos_y]
+  }
+
+  pub fn end_pos(&self) -> [usize; 2] {
+    [self.end_pos_x, self.end_pos_y]
   }
 }
 
-impl Display for GriddedToken {
+impl Display for GriddedObject<Token> {
   fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-    write!(f, "{} [{} {}]", self.token, self.pos_x, self.pos_y)
+    write!(f, "{} [{} {}]", self.obj, self.start_pos_x, self.start_pos_y)
+  }
+}
+
+impl Display for GriddedObject<Expression> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    write!(f, "{} [{} {} -> {} {}]", self.obj, self.start_pos_x, self.start_pos_y, self.end_pos_x, self.end_pos_y)
   }
 }
 
@@ -114,8 +146,8 @@ pub enum Token {
   QuestionMarkEqual,
   // ?
   TildeEqual,
-  // ^
-  PercentageEqual, // %
+  // %
+  PercentageEqual,
   // <<
   LessLessEqual,
   // >>

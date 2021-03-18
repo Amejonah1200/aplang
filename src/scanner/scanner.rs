@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 
 use predicates::{BoxPredicate, Predicate};
 
-use crate::scanner::token::GriddedToken;
+use crate::scanner::token::{GriddedObject, Token};
 use crate::scanner::token::Token::EOF;
 
 pub struct Scanner<'a, T> {
@@ -88,6 +88,13 @@ impl<'a, T> Scanner<'a, T> {
     self.peek >= self.elements.len()
   }
 
+  pub fn peek_get(&self) -> usize { self.peek }
+  pub fn peek_set(&mut self, peek: usize) {
+    if peek < self.elements.len() {
+      self.peek = peek;
+    }
+  }
+
   pub fn pos_adv(&mut self, nb: usize) {
     if nb == 0 { return; }
     if self.position + nb < self.elements.len() {
@@ -129,13 +136,6 @@ impl<'a, T> Scanner<'a, T> {
       self.position = pos;
     }
     self.peek_reset();
-  }
-
-  pub fn peek_get(&self) -> usize { self.peek }
-  pub fn peek_set(&mut self, peek: usize) {
-    if peek < self.elements.len() {
-      self.peek = peek;
-    }
   }
 }
 
@@ -209,12 +209,12 @@ impl<'a> Scanner<'a, char> {
   }
 }
 
-impl<'a> Scanner<'a, GriddedToken> {
-  pub fn peek_or_eof(&mut self) -> &GriddedToken {
+impl<'a> Scanner<'a, GriddedObject<Token>> {
+  pub fn peek_or_eof(&mut self) -> &GriddedObject<Token> {
     let size = self.elements.len();
     if size == 0 { panic!("A gridded token vec should at least containing an EOF Token."); }
     let result = self.elements.get(self.peek);
-    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+    if result.is_some() && !matches!(result.unwrap().obj, EOF) {
       self.peek += 1;
     }
     result.expect("A gridded token vec should terminate with an EOF Token.")
@@ -222,7 +222,7 @@ impl<'a> Scanner<'a, GriddedToken> {
 
   pub fn peek_rewind_not_eof(&mut self, amount: usize) {
     let result = self.elements.get(self.peek);
-    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+    if result.is_some() && !matches!(result.unwrap().obj, EOF) {
       if amount < self.peek {
         self.peek -= amount;
       } else {
@@ -231,11 +231,21 @@ impl<'a> Scanner<'a, GriddedToken> {
     }
   }
 
-  pub fn consume_or_eof(&mut self) -> &GriddedToken {
+  pub fn peek_coords(&self) -> [usize; 2] {
+    let temp = self.elements.get(self.peek).unwrap();
+    [temp.start_pos_x, temp.start_pos_y]
+  }
+
+  pub fn peek_next_coords(&self) -> [usize; 2] {
+    let temp = self.elements.get(if self.peek + 1 < self.elements.len() { self.peek + 1 } else { self.peek }).unwrap();
+    [temp.start_pos_x, temp.start_pos_y]
+  }
+
+  pub fn consume_or_eof(&mut self) -> &GriddedObject<Token> {
     let size = self.elements.len();
     if size == 0 { panic!("A gridded token vec should at least containing an EOF Token."); }
     let result = self.elements.get(self.position);
-    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+    if result.is_some() && !matches!(result.unwrap().obj, EOF) {
       self.peek += 1;
     }
     result.expect("A gridded token vec should terminate with an EOF Token.")
@@ -243,7 +253,7 @@ impl<'a> Scanner<'a, GriddedToken> {
 
   pub fn consume_rewind_not_eof(&mut self, amount: usize) {
     let result = self.elements.get(self.position);
-    if result.is_some() && !matches!(result.unwrap().token, EOF) {
+    if result.is_some() && !matches!(result.unwrap().obj, EOF) {
       if amount < self.position {
         self.position -= amount;
       } else {
@@ -251,5 +261,15 @@ impl<'a> Scanner<'a, GriddedToken> {
       }
       self.peek_reset();
     }
+  }
+
+  pub fn consume_coords(&self) -> [usize; 2] {
+    let temp = self.elements.get(self.position).unwrap();
+    [temp.start_pos_x, temp.start_pos_y]
+  }
+
+  pub fn consume_next_coords(&self) -> [usize; 2] {
+    let temp = self.elements.get(if self.position + 1 < self.elements.len() { self.position + 1 } else { self.position }).unwrap();
+    [temp.start_pos_x, temp.start_pos_y]
   }
 }

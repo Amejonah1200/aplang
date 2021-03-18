@@ -7,7 +7,7 @@ use predicates::PredicateBoxExt;
 use predicates::prelude::predicate::function;
 
 use crate::scanner::scanner::Scanner;
-use crate::scanner::token::{escaped_char_to_char, GriddedToken, parse_keyword, Token};
+use crate::scanner::token::{escaped_char_to_char, GriddedObject, parse_keyword, Token};
 use crate::scanner::token::Token::*;
 
 /**
@@ -50,7 +50,7 @@ macro_rules! post_inc {
   };
 }
 
-pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
+pub fn scan(path: &Path) -> Result<Box<Vec<GriddedObject<Token>>>> {
   let string = fs::read_to_string(path);
   let elemts = match string {
     Ok(str) => str.chars().collect(),
@@ -73,7 +73,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
       ]).unwrap_or($single)
     };
   }
-  let mut vec: Box<Vec<GriddedToken>> = Box::new(Vec::new());
+  let mut vec: Box<Vec<GriddedObject<Token>>> = Box::new(Vec::new());
   let mut pos_temp = 0usize;
   let mut pos_x = 0usize;
   let mut pos_y = 0usize;
@@ -230,12 +230,15 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
                   number.push(*chr);
                   true
                 }
-                '.' if !has_dot => {
-                  if ('0'..='9').contains(scanner.peek_char().unwrap_or('a'.borrow())) {
+                '.' => {
+                  if !has_dot && ('0'..='9').contains(scanner.peek_char().unwrap_or('a'.borrow())) {
                     has_dot = true;
                     number.push('.');
                     true
-                  } else { false }
+                  } else {
+                    scanner.pos_rewind(1);
+                    false
+                  }
                 }
                 _ => {
                   scanner.pos_rewind(1);
@@ -258,11 +261,11 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
         }
         other => Unknown(other.to_string())
       } {
-        NewLine => GriddedToken::new(NewLine, {
+        NewLine => GriddedObject::new_point(NewLine, {
           post_set!(pos_temp, scanner.pos_get());
           post_set!(pos_x, 0)
         }, post_inc!(pos_y, 1)),
-        tok => GriddedToken::new(tok, {
+        tok => GriddedObject::new_point(tok, {
           let diff = scanner.pos_get() - post_set!(pos_temp, scanner.pos_get());
           post_inc!(pos_x, diff)
         }, pos_y)
@@ -270,7 +273,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
       true
     }
     None => {
-      vec.push(GriddedToken::new(EOF, pos_x, pos_y));
+      vec.push(GriddedObject::new_point(EOF, pos_x, pos_y));
       false
     }
   } {
@@ -282,6 +285,6 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedToken>>> {
 /**
 * Get rid of Spaces, NewLines and Unknown
 */
-pub fn clean_up(vec: &mut Vec<GriddedToken>) {
-  vec.retain(|t| !matches!(t.token, Space(_) | Unknown(_) | NewLine | Comment(_)))
+pub fn clean_up(vec: &mut Vec<GriddedObject<Token>>) {
+  vec.retain(|t| !matches!(t.obj, Space(_) | Unknown(_) | NewLine | Comment(_)))
 }
