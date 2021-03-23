@@ -4,18 +4,21 @@ declaration    → class_decl | fun_decl | var_decl ;
 
 visibility     → "prot" | "pub" | "pak" ;
 
-class_decl     → macro_annotation* visibility? "class" IDENTIFIER ( "<" type ("," type)* ">")?
-                 (":" type ("," type)*)? "{" macro_annotation* declaration* "}" ;
+class_decl     → macro_annotation* visibility? "class" IDENTIFIER ( generics )?
+                 (":" type ("," type)*)? "{" declaration* "}" ;
 fun_decl       → macro_annotation* visibility? generics? type? function ;
-var_decl       → macro_annotation* visibility? type IDENTIFIER ( "=" expression )? ";" ;
+var_decl       → macro_annotation* visibility? IDENTIFIER ( ":" type )? ( "=" expression )? ";" ;
+use_decl       → "use" IDENTIFIER ( "." IDENTIFIER)* ("." "*")? ";" ;
 
-statement      → for_stmt  | if_stmt | return_stmt | while_stmt | do_while | block | exp_stmt ;
-for_stmt       → "for" "(" ( var_decl | exp_stmt | ";" )? expression? ";" expression? ")" statement 
+statement      → for_stmt  | if_stmt | return_stmt | while_stmt | do_while | block | var_stmt | exp_stmt | loop ;
+for_stmt       → "for" "(" ( var_decl | exp_stmt | ";" )? expression? ";" expression? ")" statement
                | "for" "(" IDENTIFIER ":" expression ")" statement ;
 if_stmt        → "if"  "(" expression  ")" statement ( "else" statement )? ;
 return_stmt    → "return" expression? ";" ;
+break_stmt     → "break" expression ";" ;
 while_stmt     → "while" "(" expression ")" statement ;
 do_while       → "do" block "while" "(" expression ")" ";" ;
+var_stmt       → "let" IDENTIFIER ( ":" type )? ( "=" expression ) ";" ;
 exp_stmt       → expression ";" ;
 
 expression     → assignment ;
@@ -30,22 +33,30 @@ comparison     → term        ( ( ">"  | ">=" | "<" | "<=" ) term      )* ;
 term           → factor      ( ( "-"  | "+"               ) factor    )* ;
 factor         → bit_op      ( ( "/"  | "*"  | "**"       ) bit_op    )* ;
 bit_op         → unary_left  ( ( "|"  | "^"  | "&"        ) unary_left)* ;
-unary_left     →               ( "!"  | "~"  ) unary_left | unary_right  ;
-unary_right    → primary       ( "--" | "++" ) ( NUMBER | "(" expression ")" ) | call  ;
-call           → primary       ( "(" arguments? ")" | "." IDENTIFIER | array_clause )* ;
+unary_left     →               ( "!"  | "~"  ) unary_left | call  ;
+// unary_right    → primary       ( "--" | "++" ) ( NUMBER | "(" expression ")" ) | call  ;
+call           → primary arguments? ( "." IDENTIFIER (arguments | array_clause )* ;
 
-primary        → LITERAL | "self" | "super" | IDENTIFIER | lambda | "(" expression ")" | block ;
-               
-function       → IDENTIFIER "(" parameters? ")" "{" declaration* expression? "}" ;
+primary        → LITERAL | "self" | "super" | IDENTIFIER | lambda | "(" expression ")" | block | loop ;
+
+loop           → "loop" block ;
+function       → IDENTIFIER "(" parameters? ")" block ;
 parameters     → IDENTIFIER ":" type ( "," IDENTIFIER ":" type)* ;
-arguments      → expression ( "," expression )* ;
+arguments      → "(" expression ( "," expression )* ")" ;
 block          → "{" (var_decl | statement)* expression? "}" ;
 type           → path generics ;
 path           → IDENTIFIER ( "." IDENTIFIER)* ;
 generics       → "<" type? ("," type)* ">" ;
+wildcard       → ("?" | IDENTIFIER) (">" | "<") type | type
 lambda         → "(" IDENTIFIER? ("," IDENTIFIER)* ")" "->" expression ;
 LITERAL        → "true" | "false" | NUMBER | STRING | CHAR
 NUMBER         → "0"-"9" ("." "0"-"9")? ( PREFIX )
+
+// TODO: Lambda
+// TODO: Tuples
+// TODO: Deconstruction
+// TODO: Think about post-incr/decr
+// TODO: Think about c-style fors
 
 array_clause   → "[" expression "]" ;
 macro_annotation → ("@" | "#") "[" path
