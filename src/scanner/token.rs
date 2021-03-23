@@ -4,10 +4,7 @@ use std::fmt::{Debug, Display, Formatter};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use crate::ast::expr::Expression;
-use crate::scanner::token::Token::NewLine;
-
-#[derive(Debug, Clone)]
+#[derive(Clone, Hash)]
 pub struct GriddedObject<T> {
   pub rect: bool,
   pub start_pos_x: usize,
@@ -34,6 +31,18 @@ impl<T> GriddedObject<T> {
     GriddedObject { rect: false, start_pos_x: start_pos[0], start_pos_y: start_pos[1], obj, end_pos_x: end_pos[0], end_pos_y: end_pos[1] }
   }
 
+  pub fn new_vert(start_pos_x: usize, pos_y: usize, obj: T, end_pos_x: usize) -> Self {
+    if end_pos_x - start_pos_x > 1 {
+      GriddedObject::new_rect(start_pos_x, pos_y, obj, end_pos_x, pos_y)
+    } else {
+      GriddedObject::new_point(obj, start_pos_x, pos_y)
+    }
+  }
+
+  pub fn new_rect_other<T2>(gridded: &GriddedObject<T2>, obj: T) -> Self {
+    GriddedObject::new_rect_array(gridded.start_pos(), obj, gridded.end_pos())
+  }
+
   pub fn start_pos(&self) -> [usize; 2] {
     [self.start_pos_x, self.start_pos_y]
   }
@@ -43,15 +52,30 @@ impl<T> GriddedObject<T> {
   }
 }
 
-impl Display for GriddedObject<Token> {
-  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-    write!(f, "{} [{} {}]", self.obj, self.start_pos_x, self.start_pos_y)
+
+impl PartialEq for GriddedObject<Token> {
+  fn eq(&self, other: &Self) -> bool {
+    self.start_pos().eq(&other.start_pos()) && self.end_pos().eq(&other.end_pos()) && self.rect == self.rect && self.obj.eq(&other.obj)
+  }
+
+  fn ne(&self, other: &Self) -> bool {
+    !self.eq(&other)
   }
 }
 
-impl Display for GriddedObject<Expression> {
+impl Eq for GriddedObject<Token> {}
+
+impl<T> Debug for GriddedObject<T> where T: Debug + Display {
   fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-    write!(f, "{} [{} {} -> {} {}]", self.obj, self.start_pos_x, self.start_pos_y, self.end_pos_x, self.end_pos_y)
+    if crate::VERBOSE_DEBUG {
+      if self.rect {
+        write!(f, "{:#?} [{} {} -> {} {}]", self.obj, self.start_pos_x, self.start_pos_y, self.end_pos_x, self.end_pos_y)
+      } else {
+        write!(f, "{:#?} [{} {}]", self.obj, self.start_pos_x, self.start_pos_y)
+      }
+    } else {
+      write!(f, "{:#?}", self.obj)
+    }
   }
 }
 
@@ -202,16 +226,21 @@ pub enum Token {
   EOF,
 }
 
-pub const KEYWORDS: [&str; 18] = ["if", "while", "for", "var", "pub", "pak", "prot", "const", "chr", "str", "int", "float", "double", "long", "bool", "class", "super", "self"];
+pub const KEYWORDS: [&str; 26] = ["if", "else", "while", "loop", "do", "for", "return", "break", "let", "pub", "pak", "prot", "const", "chr", "str", "int", "float", "double", "long", "bool", "true", "false", "class", "super", "self", "use"];
 
 #[derive(FromPrimitive, ToPrimitive, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Keyword {
   // flow
   If,
+  Else,
   While,
+  Loop,
+  Do,
   For,
+  Return,
+  Break,
   // var
-  Var,
+  Let,
   // visibility
   Pub,
   Pak,
@@ -226,10 +255,14 @@ pub enum Keyword {
   Double,
   Long,
   Bool,
+  True,
+  False,
   // structs
   Class,
   Super,
   SelfKey,
+  // other
+  Use,
 }
 
 pub fn parse_keyword(str: &std::string::String) -> Option<Keyword> {

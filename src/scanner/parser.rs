@@ -1,7 +1,5 @@
 use std::borrow::{Borrow, BorrowMut};
-use std::fs;
 use std::io::Result;
-use std::path::Path;
 
 use predicates::PredicateBoxExt;
 use predicates::prelude::predicate::function;
@@ -9,6 +7,7 @@ use predicates::prelude::predicate::function;
 use crate::scanner::scanner::Scanner;
 use crate::scanner::token::{escaped_char_to_char, GriddedObject, parse_keyword, Token};
 use crate::scanner::token::Token::*;
+extern crate alloc;
 
 /**
 * Omit the first char, cuz it was already consumed in scan.
@@ -50,13 +49,9 @@ macro_rules! post_inc {
   };
 }
 
-pub fn scan(path: &Path) -> Result<Box<Vec<GriddedObject<Token>>>> {
-  let string = fs::read_to_string(path);
-  let elemts = match string {
-    Ok(str) => str.chars().collect(),
-    Err(err) => { return Result::Err(err); }
-  };
-  let mut scanner = Scanner::new(&elemts);
+pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
+  let chars =str.chars().collect();
+  let mut scanner = Scanner::new(&chars);
   macro_rules! search_equal {
     ($equal:expr, $single:expr$(, $x:expr)*) => {
       search_and_consume_tokens(scanner.borrow_mut(), vec![
@@ -73,7 +68,7 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedObject<Token>>>> {
       ]).unwrap_or($single)
     };
   }
-  let mut vec: Box<Vec<GriddedObject<Token>>> = Box::new(Vec::new());
+  let mut vec: Vec<GriddedObject<Token>> = Vec::new();
   let mut pos_temp = 0usize;
   let mut pos_x = 0usize;
   let mut pos_y = 0usize;
@@ -265,10 +260,12 @@ pub fn scan(path: &Path) -> Result<Box<Vec<GriddedObject<Token>>>> {
           post_set!(pos_temp, scanner.pos_get());
           post_set!(pos_x, 0)
         }, post_inc!(pos_y, 1)),
-        tok => GriddedObject::new_point(tok, {
-          let diff = scanner.pos_get() - post_set!(pos_temp, scanner.pos_get());
-          post_inc!(pos_x, diff)
-        }, pos_y)
+        tok => {
+          GriddedObject::new_vert( pos_x, pos_y,tok, {
+            pos_x += (scanner.pos_get() - post_set!(pos_temp, scanner.pos_get()));
+            pos_x - 1
+          })
+        }
       });
       true
     }
