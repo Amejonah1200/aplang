@@ -1,8 +1,6 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 
-use predicates::{BoxPredicate, Predicate};
-
 use crate::scanner::token::{GriddedObject, Token};
 use crate::scanner::token::Token::EOF;
 
@@ -140,12 +138,13 @@ impl<'a, T> Scanner<'a, T> {
 }
 
 impl<'a> Scanner<'a, char> {
-  pub fn next_search_chars(&mut self, consume: bool, use_peek: bool, predicate: BoxPredicate<char>) -> std::string::String {
+  pub fn next_search_chars<F>(&mut self, consume: bool, use_peek: bool, predicate: F) -> std::string::String
+    where F: Fn(&char) -> bool {
     let mut result = std::string::String::new();
     let start_pos = if use_peek { self.peek } else { self.position };
     let mut i = 0;
     while match self.elements.get(start_pos + i) {
-      Some(c) if predicate.eval(c) => {
+      Some(c) if predicate(c) => {
         result.push(*c);
         true
       }
@@ -171,7 +170,8 @@ impl<'a> Scanner<'a, char> {
     Some(result)
   }
 
-  pub fn consume_search_chars(&mut self, predicate: BoxPredicate<char>) -> std::string::String {
+  pub fn consume_search_chars<F>(&mut self, predicate: F) -> std::string::String
+    where F: Fn(&char) -> bool {
     self.next_search_chars(true, false, predicate)
   }
 
@@ -204,7 +204,8 @@ impl<'a> Scanner<'a, char> {
     }
   }
 
-  pub fn peek_search_chars(&mut self, predicate: BoxPredicate<char>) -> std::string::String {
+  pub fn peek_search_chars<F>(&mut self, predicate: F) -> std::string::String
+    where F: Fn(&char) -> bool {
     self.next_search_chars(false, true, predicate)
   }
 }
@@ -231,14 +232,23 @@ impl<'a> Scanner<'a, GriddedObject<Token>> {
     }
   }
 
-  pub fn peek_coords(&self) -> [usize; 2] {
-    let temp = self.elements.get(self.peek).unwrap();
-    [temp.start_pos_x, temp.start_pos_y]
+  pub fn peek_previous_coords(&self) -> [[usize; 2]; 2] {
+    if self.peek == 0 {
+      self.peek_coords()
+    } else {
+      let temp = self.elements.get(self.peek - 1).unwrap();
+      [temp.start_pos(), temp.end_pos()]
+    }
   }
 
-  pub fn peek_next_coords(&self) -> [usize; 2] {
+  pub fn peek_coords(&self) -> [[usize; 2]; 2] {
+    let temp = self.elements.get(self.peek).unwrap();
+    [temp.start_pos(), temp.end_pos()]
+  }
+
+  pub fn peek_next_coords(&self) -> [[usize; 2]; 2] {
     let temp = self.elements.get(if self.peek + 1 < self.elements.len() { self.peek + 1 } else { self.peek }).unwrap();
-    [temp.start_pos_x, temp.start_pos_y]
+    [temp.start_pos(), temp.end_pos()]
   }
 
   pub fn consume_or_eof(&mut self) -> &GriddedObject<Token> {

@@ -1,9 +1,6 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::io::Result;
 
-use predicates::PredicateBoxExt;
-use predicates::prelude::predicate::function;
-
 use crate::scanner::scanner::Scanner;
 use crate::scanner::token::{escaped_char_to_char, GriddedObject, parse_keyword, Token};
 use crate::scanner::token::Token::*;
@@ -248,7 +245,7 @@ pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
         'a'..='z' | 'A'..='Z' | '_' => {
           let mut word = std::string::String::new();
           word.push(*c);
-          word.push_str(scanner.consume_search_chars(function(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '$' | '_')).boxed()).as_str());
+          word.push_str(scanner.consume_search_chars(|c| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '$' | '_')).as_str());
           match parse_keyword(&word) {
             Some(kw) => Keyword(kw),
             None => Identifier(word)

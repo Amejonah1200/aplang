@@ -32,7 +32,7 @@ impl<T> GriddedObject<T> {
   }
 
   pub fn new_vert(start_pos_x: usize, pos_y: usize, obj: T, end_pos_x: usize) -> Self {
-    if end_pos_x - start_pos_x > 1 {
+    if end_pos_x - start_pos_x > 0 {
       GriddedObject::new_rect(start_pos_x, pos_y, obj, end_pos_x, pos_y)
     } else {
       GriddedObject::new_point(obj, start_pos_x, pos_y)

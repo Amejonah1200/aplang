@@ -26,7 +26,8 @@ fn main() {
           clean_up(vec.as_mut());
           // print_vec(&vec);
           println!("AST:");
-          println!("{:#?}", ast::ast::ast_build(&vec, &str, path));
+          ast::ast::ast_build(&vec, &str, path);
+          // println!("{:#?}", ast::ast::ast_build(&vec, &str, path));
         }
         Err(err) => println!("{}", err.to_string())
       }
@@ -41,7 +42,7 @@ fn print_vec(vec: &Vec<GriddedObject<Token>>) {
     match (*t).obj {
       Token::Unknown(_) => {}
       Token::NewLine => print!("\n"),
-      _ => print!("[{} ({} {}) -> ({} {})]", token_to_string(&t.obj), t.start_pos_x, t.start_pos_y, t.end_pos_x, t.end_pos_y)
+      _ => print!("[{} ({} {}) -> [{} {}]]", token_to_string(&t.obj), t.start_pos_x, t.start_pos_y, t.end_pos_x, t.end_pos_y)
     }
   }
   println!()
