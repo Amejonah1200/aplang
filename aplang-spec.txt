@@ -37,14 +37,17 @@ unary_left     →               ( "!"  | "~"  ) unary_left | call  ;
 // unary_right    → primary       ( "--" | "++" ) ( NUMBER | "(" expression ")" ) | call  ;
 call           → primary arguments? ( "." IDENTIFIER (arguments | array_clause )* ;
 
-primary        → LITERAL | "self" | "super" | IDENTIFIER | lambda | "(" expression ")" | block | loop ;
+primary        → LITERAL | "self" | "super" | IDENTIFIER | lambda | "(" expression ")" | block | loop | arguments ;
 
 loop           → "loop" block ;
 function       → IDENTIFIER "(" parameters? ")" block ;
 parameters     → IDENTIFIER ":" type ( "," IDENTIFIER ":" type)* ;
 arguments      → "(" expression ( "," expression )* ")" ;
 block          → "{" (var_decl | statement)* expression? "}" ;
-type           → path generics ;
+type           → lambda_type | tuple_type | path generics ;
+tuple_type     → "(" type ("," type)+ ")" ;
+lambda_type    → "(" type? ("," type)* ")" "->" ( "(" ")" | type ) ;
+array_type     → type ( "[" NUMBER? "]" )+;
 path           → IDENTIFIER ( "." IDENTIFIER)* ;
 generics       → "<" type? ("," type)* ">" ;
 wildcard       → ("?" | IDENTIFIER) (">" | "<") type | type
@@ -52,11 +55,12 @@ lambda         → "(" IDENTIFIER? ("," IDENTIFIER)* ")" "->" expression ;
 LITERAL        → "true" | "false" | NUMBER | STRING | CHAR
 NUMBER         → "0"-"9" ("." "0"-"9")? ( PREFIX )
 
-// TODO: Lambda
-// TODO: Tuples
 // TODO: Deconstruction
 // TODO: Think about post-incr/decr
 // TODO: Think about c-style fors
+// TODO: Think about Constructors
+// TODO: Think about dataclsses
+// TODO: Think about enums (Rust and Java-like)
 
 array_clause   → "[" expression "]" ;
 macro_annotation → ("@" | "#") "[" path
