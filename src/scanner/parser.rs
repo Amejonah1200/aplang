@@ -1,10 +1,12 @@
+extern crate alloc;
+
 use std::borrow::{Borrow, BorrowMut};
 use std::io::Result;
 
+use crate::helper::visualisation::VisualisationPrinter;
 use crate::scanner::scanner::Scanner;
 use crate::scanner::token::{escaped_char_to_char, GriddedObject, parse_keyword, Token};
 use crate::scanner::token::Token::*;
-extern crate alloc;
 
 /**
 * Omit the first char, cuz it was already consumed in scan.
@@ -46,8 +48,8 @@ macro_rules! post_inc {
   };
 }
 
-pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
-  let chars =str.chars().collect();
+pub fn scan(str: &alloc::string::String, visualizer: &VisualisationPrinter) -> Result<Vec<GriddedObject<Token>>> {
+  let chars = str.chars().collect();
   let mut scanner = Scanner::new(&chars);
   macro_rules! search_equal {
     ($equal:expr, $single:expr$(, $x:expr)*) => {
@@ -112,7 +114,7 @@ pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
         '\r' => if scanner.peek_search_char('\n') {
           scanner.pos_to_peek();
           NewLine
-        } else { Unknown('\r'.to_string()) },
+        } else { Unknown },
         '\n' => NewLine,
         '~' => search_equal!(TildeEqual, Tilde),
         '?' => search_equal!(QuestionMarkEqual, QuestionMark, (":", QuestionMarkColon)),
@@ -149,36 +151,36 @@ pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
         '"' => {
           let mut str = std::string::String::new();
           let mut result = None;
-          while match scanner.peek() {
-            Some(chr) => {
-              match chr {
-                '\\' => {
-                  match escaped_char_to_char(EscapedChar(*scanner.peek_char().unwrap_or('a'.borrow()))) {
-                    Some(esc_chr) => str.push(esc_chr),
-                    None => {
-                      str.push('\\');
-                      scanner.peek_rewind(1)
+          loop {
+            match scanner.peek() {
+              Some(chr) => {
+                match chr {
+                  '\\' => {
+                    match escaped_char_to_char(EscapedChar(*scanner.peek_char().unwrap_or('a'.borrow()))) {
+                      Some(esc_chr) => str.push(esc_chr),
+                      None => {
+                        str.push('\\');
+                        scanner.peek_rewind(1)
+                      }
                     }
                   }
-                  true
-                }
-                '\"' => {
-                  result.replace(String(str.to_string()));
-                  scanner.pos_to_peek();
-                  false
-                }
-                '\r' | '\n' => {
-                  scanner.peek_reset();
-                  false
-                }
-                _ => {
-                  str.push(*chr);
-                  true
+                  '\"' => {
+                    result.replace(String(str.to_string()));
+                    scanner.pos_to_peek();
+                    break;
+                  }
+                  '\r' | '\n' => {
+                    scanner.peek_reset();
+                    break;
+                  }
+                  _ => {
+                    str.push(*chr);
+                  }
                 }
               }
+              None => break
             }
-            None => false
-          } {}
+          }
           result.unwrap_or(DoubleQuotes)
         }
         '\'' => {
@@ -215,31 +217,31 @@ pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
           let mut number = std::string::String::new();
           number.push(*c);
           let mut has_dot = false;
-          while match scanner.consume() {
-            Some(chr) => {
-              match chr {
-                '0'..='9' | 'a'..='z' | 'A'..='Z' => {
-                  number.push(*chr);
-                  true
-                }
-                '.' => {
-                  if !has_dot && ('0'..='9').contains(scanner.peek_char().unwrap_or('a'.borrow())) {
-                    has_dot = true;
-                    number.push('.');
-                    true
-                  } else {
+          loop {
+            match scanner.consume() {
+              Some(chr) => {
+                match chr {
+                  '0'..='9' | 'a'..='z' | 'A'..='Z' => {
+                    number.push(*chr);
+                  }
+                  '.' => {
+                    if !has_dot && ('0'..='9').contains(scanner.peek_char().unwrap_or('a'.borrow())) {
+                      has_dot = true;
+                      number.push('.');
+                    } else {
+                      scanner.pos_rewind(1);
+                      break;
+                    }
+                  }
+                  _ => {
                     scanner.pos_rewind(1);
-                    false
+                    break;
                   }
                 }
-                _ => {
-                  scanner.pos_rewind(1);
-                  false
-                }
               }
+              None => break
             }
-            None => false
-          } {}
+          }
           Number(number)
         }
         'a'..='z' | 'A'..='Z' | '_' => {
@@ -251,14 +253,22 @@ pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
             None => Identifier(word)
           }
         }
-        other => Unknown(other.to_string())
+        _ => Unknown
       } {
         NewLine => GriddedObject::new_point(NewLine, {
           post_set!(pos_temp, scanner.pos_get());
           post_set!(pos_x, 0)
         }, post_inc!(pos_y, 1)),
+        Unknown => {
+          visualizer.print_visualisation_arr([pos_x, pos_y], [pos_x, pos_y]);
+          eprintln!("[Tokenizer] Unknown character. Ignoring it.");
+          GriddedObject::new_vert(pos_x, pos_y, Unknown, {
+            pos_x += (scanner.pos_get() - post_set!(pos_temp, scanner.pos_get()));
+            pos_x - 1
+          })
+        }
         tok => {
-          GriddedObject::new_vert( pos_x, pos_y,tok, {
+          GriddedObject::new_vert(pos_x, pos_y, tok, {
             pos_x += (scanner.pos_get() - post_set!(pos_temp, scanner.pos_get()));
             pos_x - 1
           })
@@ -280,5 +290,5 @@ pub fn scan(str: &alloc::string::String) -> Result<Vec<GriddedObject<Token>>> {
 * Get rid of Spaces, NewLines and Unknown
 */
 pub fn clean_up(vec: &mut Vec<GriddedObject<Token>>) {
-  vec.retain(|t| !matches!(t.obj, Space(_) | Unknown(_) | NewLine | Comment(_)))
+  vec.retain(|t| !matches!(t.obj, Space(_) | Unknown | NewLine | Comment(_)))
 }

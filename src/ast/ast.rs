@@ -1,31 +1,31 @@
 extern crate alloc;
 
-use core::str::Lines;
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::ops::Range;
 use std::path::Path;
-
-use regex::Regex;
 
 use crate::ast::expr::{Expression, For, Generic, Type, Unary, Wildcard};
 use crate::ast::expr::Expression::*;
 use crate::ast::expr::Primary::{Id, Literal, SelfIvk, SuperIvk};
+use crate::ast::expr::Type::Primitive;
 use crate::ast::expr::Visibility;
+use crate::helper::visualisation::VisualisationPrinter;
 use crate::scanner::scanner::Scanner;
 use crate::scanner::token::{GriddedObject, Token};
 use crate::scanner::token::Keyword;
+use crate::scanner::token::Keyword::PrimitiveType;
+use crate::scanner::token::PrimitiveTypeKeyword::Int;
 use crate::scanner::token::Token::*;
 
 struct Parser<'a> {
   scanner: Scanner<'a, GriddedObject<Token>>,
-  lines: Vec<&'a str>,
+  visualizer: &'a VisualisationPrinter<'a>,
   path: &'a Path,
 }
 
 
-pub fn ast_build(tokens: &Vec<GriddedObject<Token>>, str: &alloc::string::String, path: &Path) -> Expression {
-  Parser { scanner: Scanner::new(tokens), lines: str.lines().collect(), path }.program()
+pub fn ast_build(tokens: &Vec<GriddedObject<Token>>, visualizer: &VisualisationPrinter, path: &Path) -> Expression {
+  Parser { scanner: Scanner::new(tokens), visualizer, path }.program()
 }
 
 macro_rules! token_match {
@@ -80,7 +80,7 @@ macro_rules! identifier_match {
 #[macro_export]
 macro_rules! value_set {
   ($var:ident, $value:expr) => {
-    { $var = $value; $var }
+    { $var = $value; &$var }
   };
 }
 
@@ -181,7 +181,7 @@ impl<'a> Parser<'a> {
             self.scanner.peek_rewind(1);
             self.class_decl(start_coords, macro_annotations, visibility)
           }
-          Keyword::Chr | Keyword::Str | Keyword::Int | Keyword::Float | Keyword::Double | Keyword::Long | Keyword::Bool => {
+          Keyword::PrimitiveType(t) => {
             let id = identifier_match!(self, "declaration : Keyword/func_or_var/id");
             let decisive_token = self.scanner.peek_or_eof().clone();
             match decisive_token.obj {
@@ -190,7 +190,7 @@ impl<'a> Parser<'a> {
                   start_coords,
                   VarDecl(macro_annotations, visibility, GriddedObject::new_rect_array(
                     decisive_token.start_pos(),
-                    Type::Primitive(kw.clone()),
+                    Type::Primitive(t.clone()),
                     decisive_token.end_pos(),
                   ), id, None),
                   self.scanner.peek_previous_coords()[1],
@@ -200,7 +200,7 @@ impl<'a> Parser<'a> {
                   start_coords,
                   VarDecl(macro_annotations, visibility, GriddedObject::new_rect_array(
                     decisive_token.start_pos(),
-                    Type::Primitive(kw.clone()),
+                    Type::Primitive(t.clone()),
                     decisive_token.end_pos(),
                   ), id, Some(Box::new(self.expression()))),
                   {
@@ -217,7 +217,7 @@ impl<'a> Parser<'a> {
                   None,
                   Some(GriddedObject::new_rect_array(
                     decisive_token.start_pos(),
-                    Type::Primitive(kw.clone()),
+                    Type::Primitive(t.clone()),
                     decisive_token.end_pos(),
                   )),
                 )
@@ -366,11 +366,11 @@ impl<'a> Parser<'a> {
     let mut path = vec![decisive_token];
     let mut is_all = false;
     while matches!({
-      decisive_token = (self.scanner.peek_or_eof().clone());
+      decisive_token = self.scanner.peek_or_eof().clone();
       &decisive_token.obj
     }, Dot) {
       match {
-        decisive_token = (self.scanner.peek_or_eof().clone());
+        decisive_token = self.scanner.peek_or_eof().clone();
         &decisive_token.obj
       } {
         Identifier(_) => path.push(decisive_token.clone()),
@@ -675,9 +675,18 @@ impl<'a> Parser<'a> {
         token.end_pos(),
       ),
       LeftParen => {
-        let expr = self.expression().obj;
-        token_match!(self, RightParen, "primary : ( expression )");
-        GriddedObject::new_rect_array(token.start_pos(), expr, self.scanner.peek_previous_coords()[1])
+        self.scanner.peek_rewind(1);
+        let tuple = self.arguments();
+        match tuple.len() {
+          1 => GriddedObject::new_rect_array(token.start_pos(), tuple.into_iter().next().unwrap().obj, self.scanner.peek_previous_coords()[1]),
+          other if other > 1 => GriddedObject::new_rect_array(token.start_pos(), Expression::Tuple(tuple), self.scanner.peek_previous_coords()[1]),
+          _ => {
+            self.scanner.peek_rewind(1);
+            let temp = self.scanner.peek_or_eof().clone();
+            self.error_str(&temp, "expression(s)", "primary : tuple or expr");
+            GriddedObject::new_point(Error, 0, 0)
+          }
+        }
       }
       LeftBrace => {
         self.scanner.peek_rewind(1);
@@ -862,26 +871,122 @@ impl<'a> Parser<'a> {
   fn type_expr(&mut self) -> GriddedObject<Type> {
     let start_coords = self.scanner.peek_coords()[0];
     let mut decisive_token = self.scanner.peek_or_eof().clone();
+    let prim;
     match &decisive_token.obj {
+      Identifier(_) => {
+        self.scanner.peek_rewind(1);
+        prim = self.type_path();
+      }
       Keyword(kw) => {
-        if matches!(kw, Keyword::Chr | Keyword::Str | Keyword::Int | Keyword::Float | Keyword::Double | Keyword::Long | Keyword::Bool) {
-          GriddedObject::new_rect_array(start_coords, Type::Primitive(kw.clone()), self.scanner.peek_previous_coords()[1])
+        match kw {
+          PrimitiveType(tp) => {
+            prim = GriddedObject::new_rect_array(start_coords, Type::Primitive(tp.clone()), decisive_token.end_pos());
+          }
+          _ => {
+            self.error_str(&decisive_token, "Primary Type, Identifier or '('", "type_array : Keyword/Other");
+            return GriddedObject::new_point(Type::Error, 0, 0);
+          }
+        }
+      }
+      LeftParen => {
+        self.scanner.peek_rewind(1);
+        prim = self.type_lambda_tuple();
+      }
+      _ => {
+        self.error_str(&decisive_token, "Primary Type, Identifier or '('", "type_array : Other");
+        return GriddedObject::new_point(Type::Error, 0, 0);
+      }
+    }
+    self.type_array(start_coords, prim)
+  }
+
+  fn type_path(&mut self) -> GriddedObject<Type> {
+    let start_coords = self.scanner.peek_coords()[0];
+    let path = self.path();
+    if matches!(self.scanner.peek_or_eof().obj, Less) {
+      self.scanner.peek_rewind(1);
+      GriddedObject::new_rect_array(start_coords, Type::Object(path, Some(self.generics())), self.scanner.peek_coords()[0])
+    } else {
+      self.scanner.peek_rewind(1);
+      GriddedObject::new_rect_array(start_coords, Type::Object(path, None), self.scanner.peek_coords()[0])
+    }
+  }
+
+  fn type_lambda_tuple(&mut self) -> GriddedObject<Type> {
+    let start_coords = self.scanner.peek_coords()[0];
+    token_match!(self, LeftParen, "type_lambda_tuple : (");
+    let mut decisive_token = self.scanner.peek_or_eof().clone();
+    match decisive_token.obj {
+      RightParen => {
+        token_match!(self, ArrowSimpleRight, "type_lambda_tuple : RightParen/->");
+        self.type_lambda_return(start_coords, Vec::new())
+      }
+      _ => {
+        self.scanner.peek_rewind(1);
+        let mut types = vec![self.type_expr()];
+        while !matches!({
+          decisive_token  = self.scanner.peek_or_eof().clone();
+          &decisive_token.obj
+        }, RightParen) {
+          self.scanner.peek_rewind(1);
+          token_match!(self, Comma, "type_lambda_tuple : params/,");
+          types.push(self.type_expr())
+        }
+        if types.len() == 1 {
+          token_match!(self, ArrowSimpleRight, "type_lambda_tuple : params/->");
+          self.type_lambda_return(start_coords, types)
+        } else if matches!(&self.scanner.peek_or_eof().obj, ArrowSimpleRight) {
+          self.type_lambda_return(start_coords, types)
         } else {
-          self.error_str(&decisive_token, "primitive or Namespace", "type_expr : keyword");
-          GriddedObject::new_point(Type::Error, 0, 0)
+          self.scanner.peek_rewind(1);
+          GriddedObject::new_rect_array(start_coords, Type::ObjectTuple(types), self.scanner.peek_coords()[0])
+        }
+      }
+    }
+  }
+
+  fn type_lambda_return(&mut self, start_coords: [usize; 2], types: Vec<GriddedObject<Type>>) -> GriddedObject<Type> {
+    let mut decisive_token = self.scanner.peek_or_eof().clone();
+    match &decisive_token.obj {
+      LeftParen => {
+        decisive_token = self.scanner.peek_or_eof().clone();
+        if matches!(&decisive_token.obj, RightParen) {
+          GriddedObject::new_rect_array(start_coords, Type::LambdaType(types, Box::new(None)), self.scanner.peek_coords()[0])
+        } else {
+          self.scanner.peek_rewind(1);
+          GriddedObject::new_rect_array(start_coords, Type::LambdaType(types, Box::new(Some(self.type_expr()))), {
+            token_match!(self, RightParen, "type_lambda_return : RightParen/LeftParen/Other");
+            self.scanner.peek_coords()[0]
+          })
         }
       }
       _ => {
         self.scanner.peek_rewind(1);
-        let path = self.path();
-        decisive_token = self.scanner.peek_or_eof().clone();
-        self.scanner.peek_rewind(1);
-        if matches!(decisive_token.obj, Less) {
-          GriddedObject::new_rect_array(start_coords, Type::Object(path, Some(self.generics())), self.scanner.peek_previous_coords()[1])
-        } else {
-          GriddedObject::new_rect_array(start_coords, Type::Object(path, None), self.scanner.peek_previous_coords()[1])
+        GriddedObject::new_rect_array(start_coords, Type::LambdaType(types, Box::new(Some(self.type_expr()))), self.scanner.peek_coords()[0])
+      }
+    }
+  }
+  fn type_array(&mut self, start_coords: [usize; 2], prim: GriddedObject<Type>) -> GriddedObject<Type> {
+    let mut arrays = Vec::new();
+    let mut decisive_token;
+    while matches!(&self.scanner.peek_or_eof().obj, LeftBracket) {
+      decisive_token = self.scanner.peek_or_eof().clone();
+      match &decisive_token.obj {
+        RightBracket => arrays.push(None),
+        Number(_) => {
+          arrays.push(Some(decisive_token));
+          token_match!(self, RightBracket, "type_array :]");
+        }
+        _ => {
+          self.error_str(&decisive_token, "'[' or Number", "type_expr : [Number?]");
         }
       }
+    }
+    self.scanner.peek_rewind(1);
+    if arrays.len() > 0 {
+      GriddedObject::new_rect_array(start_coords, Type::Array(Box::new(prim), arrays), self.scanner.peek_coords()[0])
+    } else {
+      prim
     }
   }
 
@@ -999,66 +1104,22 @@ impl<'a> Parser<'a> {
   }
 
   fn error(&mut self, token: &GriddedObject<Token>, expected: Option<Token>, loc: &'static str) {
-    self.print_visualisation_tok(token);
+    self.visualizer.print_visualisation_tok(token);
     if expected.is_some() {
       eprintln!("Unexpected {} at x: {} y: {}. Expected: {}", token.obj, token.start_pos_x, token.start_pos_y, expected.unwrap());
     } else {
       eprintln!("Unexpected {} at x: {} y: {}.", token.obj, token.start_pos_x, token.start_pos_y);
     }
     eprintln!("{}:{}:{}", self.path.display(), token.start_pos_y + 1, token.start_pos_x + 1);
-    panic!(loc);
+    panic!("{}", loc);
   }
 
   fn error_str(&mut self, token: &GriddedObject<Token>, expected: &str, loc: &'static str) {
-    self.print_visualisation_tok(token);
+    self.visualizer.print_visualisation_tok(token);
     eprintln!("Unexpected {} at x: {} y: {}. Expected: {}", token.obj, token.start_pos_x, token.start_pos_y, expected);
     eprintln!("{}:{}:{}", self.path.display(), token.start_pos_y + 1, token.start_pos_x + 1);
-    panic!(loc);
-  }
-
-  pub fn print_visualisation_expr(&mut self, expr: &GriddedObject<Expression>) {
-    self.print_visualisation_arr(expr.start_pos(), expr.end_pos())
-  }
-
-  pub fn print_visualisation_tok(&mut self, token: &GriddedObject<Token>) {
-    self.print_visualisation_arr(token.start_pos(), token.end_pos())
-  }
-
-  pub fn print_visualisation_arr(&mut self, start: [usize; 2], end: [usize; 2]) {
-    for y in start[1]..=end[1] {
-      let line_opt = self.lines.get(y);
-      if line_opt.is_none() { break; }
-      let line = line_opt.unwrap();
-      if line.len() == 0 { continue; }
-      eprintln!("{}", line);
-      if y == start[1] {
-        for _ in 0..start[0] { eprint!(" "); }
-        eprint!("↑");
-        if end[1] == start[1] {
-          match end[0] - start[0] {
-            0 => {}
-            1 => eprint!("↑"),
-            _ => {
-              for _ in (start[0] + 1)..end[0] { eprint!("_") }
-              eprint!("↑");
-            }
-          }
-        } else {
-          for _ in (start[0] + 1)..line.len() { eprint!("_") }
-        }
-        eprintln!();
-      } else if y == end[1] {
-        let range = Regex::new("^( *)").unwrap().captures(line).unwrap().get(1).unwrap().range();
-        for _ in range.clone() { eprint!(" "); }
-        for _ in range.end..end[0] { eprint!("_") }
-        eprintln!("↑");
-      } else {
-        if Regex::new("[^\\s]").unwrap().find(line).is_none() { continue; }
-        let range = Regex::new("^( *)").unwrap().captures(line).unwrap().get(1).unwrap().range();
-        for _ in range.clone() { eprint!(" "); }
-        for _ in range.end..line.len() { eprint!("_") }
-        eprintln!();
-      }
-    }
+    panic!("{}", loc);
   }
 }
+
+

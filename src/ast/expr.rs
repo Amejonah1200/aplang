@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-use crate::scanner::token::{GriddedObject, Keyword, Token};
+use crate::scanner::token::{GriddedObject, Keyword, Token, PrimitiveTypeKeyword};
 
 #[derive(Debug)]
 pub enum Expression {
@@ -141,6 +141,10 @@ pub enum Expression {
   */
   LoopExpr(Box<GriddedObject<Expression>>),
   /**
+  * tuple          → arguments ;
+  */
+  Tuple(Vec<GriddedObject<Expression>>),
+  /**
   * macro_annotation → ("@" | "#") "[" IDENTIFIER ("." IDENTIFIER)*
   *                    ("(" (IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING))
   *                                      ("," IDENTIFIER ("=" ("true" | "false" | NUMBER | STRING)))*
@@ -209,7 +213,10 @@ pub enum Wildcard {
 #[derive(Debug)]
 pub enum Type {
   Object(Vec<GriddedObject<Token>>, Option<Vec<GriddedObject<Generic>>>),
-  Primitive(Keyword),
+  ObjectTuple(Vec<GriddedObject<Type>>),
+  LambdaType(Vec<GriddedObject<Type>>, Box<Option<GriddedObject<Type>>>),
+  Primitive(PrimitiveTypeKeyword),
+  Array(Box<GriddedObject<Type>>, Vec<Option<GriddedObject<Token>>>),
   /**
   * Used only to satisfy the compiler.
   */

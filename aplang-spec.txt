@@ -44,18 +44,31 @@ function       → IDENTIFIER "(" parameters? ")" block ;
 parameters     → IDENTIFIER ":" type ( "," IDENTIFIER ":" type)* ;
 arguments      → "(" expression ( "," expression )* ")" ;
 block          → "{" (var_decl | statement)* expression? "}" ;
-type           → lambda_type | tuple_type | path generics ;
+
+type           → array_type ;
+primitive_type → "chr" | "str"
+               | "u64" | "u32" | "u16" | "u8"
+               | "i64" | "i32" | "i16" | "i8"
+               | "long" | "int" | "short" | "byte"
+               | "ulong" | "uint" | "ushort" | "ubyte"
+               | "float"| "double"| "bool" ;
+path_type      → path generics? ;
 tuple_type     → "(" type ("," type)+ ")" ;
 lambda_type    → "(" type? ("," type)* ")" "->" ( "(" ")" | type ) ;
-array_type     → type ( "[" NUMBER? "]" )+;
+array_type     → ( path_type | tuple_type | lambda_type | primitive_type ) ( "[" NUMBER? "]" )*;
+
+tuple          → arguments ;
 path           → IDENTIFIER ( "." IDENTIFIER)* ;
 generics       → "<" type? ("," type)* ">" ;
-wildcard       → ("?" | IDENTIFIER) (">" | "<") type | type
+wildcard       → ("?" | IDENTIFIER) (">" | "<") type ;
 lambda         → "(" IDENTIFIER? ("," IDENTIFIER)* ")" "->" expression ;
-LITERAL        → "true" | "false" | NUMBER | STRING | CHAR
-NUMBER         → "0"-"9" ("." "0"-"9")? ( PREFIX )
+LITERAL        → "true" | "false" | NUMBER | STRING | CHAR ;
+NUMBER         → "0"-"9" ("." "0"-"9")? ( PREFIX ) ;
+PREFIX         → ( "i" | "u" ) ( "64" | "32" | "16" | "8" )
+               | "u"? ( "l" | "L" | "i" | "I" | "s" | "S" | "b" | "B" );
 
-// TODO: Deconstruction
+// TODO: Fix Generics + Wildcards
+// TODO: Deconstruction (Kotlin Like)
 // TODO: Think about post-incr/decr
 // TODO: Think about c-style fors
 // TODO: Think about Constructors

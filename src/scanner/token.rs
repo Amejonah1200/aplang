@@ -4,6 +4,8 @@ use std::fmt::{Debug, Display, Formatter};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+use crate::scanner::token::Keyword::*;
+
 #[derive(Clone, Hash)]
 pub struct GriddedObject<T> {
   pub rect: bool,
@@ -222,13 +224,28 @@ pub enum Token {
   NewLine,
   EscapedChar(char),
 
-  Unknown(String),
+  Unknown,
   EOF,
 }
 
-pub const KEYWORDS: [&str; 26] = ["if", "else", "while", "loop", "do", "for", "return", "break", "let", "pub", "pak", "prot", "const", "chr", "str", "int", "float", "double", "long", "bool", "true", "false", "class", "super", "self", "use"];
+pub const KEYWORDS: [&str; 19] = ["if", "else", "while", "loop", "do", "for", "return", "break",
+  "let",
+  "pub", "pak", "prot",
+  "const",
+  "true", "false",
+  "class", "super", "self",
+  "use"];
 
-#[derive(FromPrimitive, ToPrimitive, Debug, Clone, Eq, PartialEq, Hash)]
+pub const PRIMITIVE_KEYWORDS: [&str; 21] = [
+  "chr", "str",
+  "u64", "u32", "u16", "u8",
+  "i64", "i32", "i16", "i8",
+  "ulong", "uint", "ushort", "ubyte",
+  "long", "int", "short", "byte",
+  "float", "double", "bool",
+];
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Keyword {
   // flow
   If,
@@ -239,36 +256,89 @@ pub enum Keyword {
   For,
   Return,
   Break,
-  // var
   Let,
-  // visibility
   Pub,
   Pak,
   Prot,
-  // final
   Const,
-  // data
-  Chr,
-  Str,
-  Int,
-  Float,
-  Double,
-  Long,
-  Bool,
+
+  PrimitiveType(PrimitiveTypeKeyword),
+
   True,
   False,
-  // structs
   Class,
   Super,
   SelfKey,
-  // other
   Use,
+}
+
+impl Display for Keyword {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    write!(f, "{:?}", self)
+  }
+}
+
+#[derive(ToPrimitive, FromPrimitive, Debug, Clone, Eq, PartialEq, Hash)]
+pub enum PrimitiveTypeKeyword {
+  Chr,
+  Str,
+
+  U64,
+  U32,
+  U16,
+  U8,
+
+  I64,
+  I32,
+  I16,
+  I8,
+
+  ULong,
+  UInt,
+  UShort,
+  UByte,
+
+  Long,
+  Int,
+  Short,
+  Byte,
+
+  Float,
+  Double,
+
+  Bool,
 }
 
 pub fn parse_keyword(str: &std::string::String) -> Option<Keyword> {
   for i in 0..KEYWORDS.len() {
     if str.cmp(KEYWORDS.get(i).unwrap().to_string().borrow()) == core::cmp::Ordering::Equal {
-      return Some(Keyword::from_usize(i).unwrap());
+      return Some(match i {
+        0 => If,
+        1 => Else,
+        2 => While,
+        3 => Loop,
+        4 => Do,
+        5 => For,
+        6 => Return,
+        7 => Break,
+        8 => Let,
+        9 => Pub,
+        10 => Pak,
+        11 => Prot,
+        12 => Const,
+        13 => True,
+        14 => False,
+        15 => Class,
+        16 => Super,
+        17 => SelfKey,
+        18 => Use,
+        _ => panic!("should never happen!")
+      });
+    }
+  }
+  for i in 0..PRIMITIVE_KEYWORDS.len() {
+    if str.cmp(PRIMITIVE_KEYWORDS.get(i).unwrap().to_string().borrow()) == core::cmp::Ordering::Equal {
+      return Some(PrimitiveType(PrimitiveTypeKeyword::from_usize(i).unwrap()));
     }
   }
   None
@@ -350,7 +420,7 @@ pub fn token_to_string(token: &Token) -> String {
     Token::Number(nb) => String::from("Number[") + nb + "]",
     Token::Word(kw) => String::from("Word[") + kw + "]",
     Token::Char(c) => String::from("Char['") + c.to_string().as_str() + "']",
-    Token::Unknown(str) => str.to_string(),
+    Token::Unknown => String::from("Unknown"),
     Token::EOF => String::from("EOF"),
     Token::PlusEqual => String::from("PlusEqual"),
     Token::MinusEqual => String::from("MinusEqual"),
@@ -371,6 +441,6 @@ pub fn token_to_string(token: &Token) -> String {
     Token::Comment(comment) => String::from("cmt: ") + comment,
     Token::EscapedChar(chr) => String::from("\\") + &chr.to_string(),
     Token::Identifier(id) => String::from("Id[\"") + id + "\"]",
-    Token::Keyword(kw) => String::from("Keyword[\"") + KEYWORDS.get(kw.to_usize().unwrap()).unwrap_or(&"?") + "\"]",
+    Token::Keyword(kw) => String::from(format!("Keyword[\"{}\"]", kw)),
   }
 }

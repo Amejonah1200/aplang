@@ -1,11 +1,13 @@
 use std::{env, fs};
 use std::path::Path;
 
+use crate::helper::visualisation::VisualisationPrinter;
 use crate::scanner::parser::clean_up;
 use crate::scanner::token::{GriddedObject, Token, token_to_string};
 
 mod scanner;
 mod ast;
+mod helper;
 
 pub const VERBOSE_DEBUG: bool = false;
 
@@ -19,30 +21,31 @@ fn main() {
   let result = fs::read_to_string(path);
   match result {
     Ok(str) => {
-      match scanner::parser::scan(&str) {
+      let printer = VisualisationPrinter { lines: str.lines().collect() };
+      match scanner::parser::scan(&str, &printer) {
         Ok(mut vec) => {
           println!("Scanned:");
           print_vec(&vec);
           clean_up(vec.as_mut());
           // print_vec(&vec);
           println!("AST:");
-          ast::ast::ast_build(&vec, &str, path);
-          // println!("{:#?}", ast::ast::ast_build(&vec, &str, path));
+
+          // ast::ast::ast_build(&vec, &printer, path);
+          println!("{:#?}", ast::ast::ast_build(&vec, &printer, path));
         }
         Err(err) => println!("{}", err.to_string())
       }
     }
     Err(_) => {}
   }
-
 }
 
 fn print_vec(vec: &Vec<GriddedObject<Token>>) {
   for t in vec.iter() {
     match (*t).obj {
-      Token::Unknown(_) => {}
+      Token::Unknown => {}
       Token::NewLine => print!("\n"),
-      _ => print!("[{} ({} {}) -> [{} {}]]", token_to_string(&t.obj), t.start_pos_x, t.start_pos_y, t.end_pos_x, t.end_pos_y)
+      _ => print!("[{} ({} {}) -> ({} {})]", token_to_string(&t.obj), t.start_pos_x, t.start_pos_y, t.end_pos_x, t.end_pos_y)
     }
   }
   println!()
