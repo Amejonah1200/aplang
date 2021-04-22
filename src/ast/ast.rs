@@ -677,14 +677,23 @@ impl<'a> Parser<'a> {
       LeftParen => {
         self.scanner.peek_rewind(1);
         let tuple = self.arguments();
-        match tuple.len() {
-          1 => GriddedObject::new_rect_array(token.start_pos(), tuple.into_iter().next().unwrap().obj, self.scanner.peek_previous_coords()[1]),
-          other if other > 1 => GriddedObject::new_rect_array(token.start_pos(), Expression::Tuple(tuple), self.scanner.peek_previous_coords()[1]),
-          _ => {
-            self.scanner.peek_rewind(1);
-            let temp = self.scanner.peek_or_eof().clone();
-            self.error_str(&temp, "expression(s)", "primary : tuple or expr");
-            GriddedObject::new_point(Error, 0, 0)
+        let params_opt = convert_vec_to_identifiers(&tuple);
+        if tuple.len() == 0 {
+          token_match!(self, ArrowSimpleRight, "primary/0/-> (for lambda)");
+          GriddedObject::new_rect_array(token.start_pos(), Lambda(Vec::new(), Box::new(self.expression())), self.scanner.peek_coords()[0])
+        } else {
+          match params_opt {
+            Some(params) => {
+              GriddedObject::new_rect_array(token.start_pos(), Expression::Lambda(params, {
+                token_match!(self, ArrowSimpleRight, "primary/_/-> (for lambda)");
+                Box::new(self.expression())
+              }), self.scanner.peek_previous_coords()[1])
+            }
+            None => if tuple.len() == 1 {
+              GriddedObject::new_rect_array(token.start_pos(), tuple.into_iter().next().unwrap().obj, self.scanner.peek_previous_coords()[1])
+            } else {
+              GriddedObject::new_rect_array(token.start_pos(), Expression::Tuple(tuple), self.scanner.peek_previous_coords()[1])
+            }
           }
         }
       }
@@ -715,6 +724,7 @@ impl<'a> Parser<'a> {
     };
     prim
   }
+
 
   fn function(&mut self, start_coords: [usize; 2], annotations: Vec<GriddedObject<Expression>>, visibility: Option<Visibility>, generics: Option<Vec<GriddedObject<Generic>>>, fun_type: Option<GriddedObject<Type>>) -> GriddedObject<Expression> {
     let id = identifier_match!(self, "function : id");
@@ -966,6 +976,7 @@ impl<'a> Parser<'a> {
       }
     }
   }
+
   fn type_array(&mut self, start_coords: [usize; 2], prim: GriddedObject<Type>) -> GriddedObject<Type> {
     let mut arrays = Vec::new();
     let mut decisive_token;
@@ -1122,4 +1133,19 @@ impl<'a> Parser<'a> {
   }
 }
 
+fn convert_vec_to_identifiers(vec: &Vec<GriddedObject<Expression>>) -> Option<Vec<GriddedObject<Token>>> {
+  let mut rep_vec = Vec::new();
+  for expr in vec.iter() {
+    match &expr.obj {
+      Primary(prim) => match &prim {
+        Id(tk) => {
+          rep_vec.push(GriddedObject::new_rect_array(expr.start_pos(), tk.clone(), expr.end_pos()))
+        }
+        _ => return None
+      }
+      _ => return None
+    }
+  }
+  Some(rep_vec)
+}
 

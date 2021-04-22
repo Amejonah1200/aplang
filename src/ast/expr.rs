@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
-use crate::scanner::token::{GriddedObject, Keyword, Token, PrimitiveTypeKeyword};
+use crate::scanner::token::{GriddedObject, Keyword, PrimitiveTypeKeyword, Token};
 
 #[derive(Debug)]
 pub enum Expression {
@@ -151,6 +151,10 @@ pub enum Expression {
   *                                      | IDENTIFIER ("," IDENTIFIER)* ) ")")? "]"
   */
   MacroAnnotation(MacroAnnotation),
+  /**
+  * lambda         → "(" IDENTIFIER? ("," IDENTIFIER)* ")" "->" expression ;
+  */
+  Lambda(Vec<GriddedObject<Token>>, Box<GriddedObject<Expression>>),
   /**
   * Used only to satisfy the compiler.
   */
