@@ -68,10 +68,8 @@ PREFIX         → ( "i" | "u" ) ( "64" | "32" | "16" | "8" )
                | "u"? ( "l" | "L" | "i" | "I" | "s" | "S" | "b" | "B" );
 
 // TODO: Fix Generics + Wildcards
-// TODO: Deconstruction (Kotlin Like)
 // TODO: Think about post-incr/decr
 // TODO: Think about c-style fors
-// TODO: Think about Constructors
 // TODO: Think about dataclsses
 // TODO: Think about enums (Rust and Java-like)
 
