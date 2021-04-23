@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::ast::expr::{Expression, For, Generic, Type, Unary, Wildcard};
+use crate::ast::expr::{ArrayIndex, Expression, For, Generic, Type, Unary, Wildcard};
 use crate::ast::expr::Expression::*;
 use crate::ast::expr::Primary::{Id, Literal, SelfIvk, SuperIvk};
 use crate::ast::expr::Type::Primitive;
@@ -638,21 +638,42 @@ impl<'a> Parser<'a> {
     } {
       calls.push(match decisive_token {
         Dot => {
-          let id = identifier_match!(self, "call : Dot/Id");
-          decisive_token = self.scanner.peek_or_eof().obj.clone();
-          self.scanner.peek_rewind(1);
-          if matches!(decisive_token, LeftParen) {
-            crate::ast::expr::Call::IdArguments(id, self.arguments())
-          } else {
-            crate::ast::expr::Call::Id(id)
-          }
+          GriddedObject::new_rect_array(self.scanner.peek_previous_coords()[0], {
+            let id = identifier_match!(self, "call : Dot/Id");
+            decisive_token = self.scanner.peek_or_eof().obj.clone();
+            self.scanner.peek_rewind(1);
+            if matches!(decisive_token, LeftParen) {
+              crate::ast::expr::Call::IdArguments(id, self.arguments())
+            } else {
+              crate::ast::expr::Call::Id(id)
+            }
+          }, self.scanner.peek_coords()[0])
         }
         LeftBracket => {
-          crate::ast::expr::Call::ArrayClause({
-            let expr = self.expression();
-            token_match!(self, RightBracket, "call : []");
-            expr
-          })
+          GriddedObject::new_rect_array(self.scanner.peek_previous_coords()[0], crate::ast::expr::Call::ArrayClause({
+            let index;
+            if matches!(self.scanner.peek_or_eof().obj, Colon) {
+              index = ArrayIndex::End(self.expression());
+              token_match!(self, RightBracket, "call : :/]");
+            } else {
+              self.scanner.peek_rewind(1);
+              let expr = self.expression();
+              if matches!(self.scanner.peek_or_eof().obj, Colon) {
+                if matches!(self.scanner.peek_or_eof().obj, RightBracket) {
+                  index = ArrayIndex::Start(expr);
+                } else {
+                  self.scanner.peek_rewind(1);
+                  index = ArrayIndex::StartEnd(expr, self.expression());
+                  token_match!(self, RightBracket, "call : no-:/:/no-]/]");
+                }
+              } else {
+                self.scanner.peek_rewind(1);
+                token_match!(self, RightBracket, "call : no-:/no-:/]");
+                index = ArrayIndex::Exact(expr)
+              }
+            }
+            index
+          }), self.scanner.peek_coords()[0])
         }
         _ => panic!("Should never happen.")
       });

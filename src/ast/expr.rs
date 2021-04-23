@@ -127,7 +127,7 @@ pub enum Expression {
   /**
   * call           → primary     ( "(" arguments? ")" )? ( "." IDENTIFIER ( "(" arguments? ")" )? | array_clause )* ;
   */
-  Call(Box<GriddedObject<Expression>>, Option<Vec<GriddedObject<Expression>>>, Vec<Call>),
+  Call(Box<GriddedObject<Expression>>, Option<Vec<GriddedObject<Expression>>>, Vec<GriddedObject<Call>>),
   /**
   * primary        → LITERAL | "self" | "super" | IDENTIFIER | lambda | "(" expression ")" | block ;
   */
@@ -161,6 +161,12 @@ pub enum Expression {
   Error,
 }
 
+impl Display for Call {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    write!(f, "{}", self)
+  }
+}
+
 impl Display for Expression {
   fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
     write!(f, "{}", self)
@@ -192,7 +198,15 @@ pub enum Primary {
 pub enum Call {
   Id(GriddedObject<Token>),
   IdArguments(GriddedObject<Token>, Vec<GriddedObject<Expression>>),
-  ArrayClause(GriddedObject<Expression>),
+  ArrayClause(ArrayIndex),
+}
+
+#[derive(Debug)]
+pub enum ArrayIndex {
+  Exact(GriddedObject<Expression>),
+  Start(GriddedObject<Expression>),
+  End(GriddedObject<Expression>),
+  StartEnd(GriddedObject<Expression>, GriddedObject<Expression>),
 }
 
 #[derive(Debug)]

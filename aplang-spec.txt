@@ -73,7 +73,7 @@ PREFIX         → ( "i" | "u" ) ( "64" | "32" | "16" | "8" )
 // TODO: Think about dataclsses
 // TODO: Think about enums (Rust and Java-like)
 
-array_clause   → "[" expression "]" ;
+array_clause   → "[" ( expression ":" | expression ":" expression | ":" expression ) "]" ;
 macro_annotation → ("@" | "#") "[" path
                    ("(" ( IDENTIFIER ("=" LITERAL) ("," IDENTIFIER ("=" LITERAL))*
                         | IDENTIFIER ("," IDENTIFIER)* )
