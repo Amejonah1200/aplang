@@ -1054,17 +1054,28 @@ impl<'a> Parser<'a> {
     let temp_a = self.scanner.peek_or_eof().clone();
     let temp_b = self.scanner.peek_or_eof().clone();
     if matches!(temp_b.obj, LessEqual | GreaterEqual) {
+      let wildcard = match temp_b.obj {
+        LessEqual => Wildcard::Super,
+        GreaterEqual => Wildcard::Sub,
+        _ => {
+          self.error_str(&temp_b, "'>' or '<'", "wildcard : Super or Sub");
+          Wildcard::Exact
+        }
+      };
+      let multiple = matches!(wildcard, Wildcard::Sub);
       GriddedObject::new_rect_array(start_coords, Generic {
-        wildcard: match temp_b.obj {
-          LessEqual => Wildcard::Super,
-          GreaterEqual => Wildcard::Sub,
-          _ => {
-            self.error_str(&temp_b, "'>' or '<'", "wildcard : Super or Sub");
-            Wildcard::Exact
-          }
-        },
+        wildcard,
         id: Some(temp_a),
-        type_id: Some(self.type_expr()),
+        type_ids: Some({
+          let mut ids = vec![self.type_expr()];
+          if multiple {
+            while matches!(&self.scanner.peek_or_eof().obj, Ampersand) {
+              ids.push(self.type_expr());
+            }
+            self.scanner.peek_rewind(1);
+          }
+          ids
+        }), // TODO: Multiple bounds in Generics
       }, self.scanner.peek_previous_coords()[1])
     } else {
       self.scanner.peek_rewind(1);
@@ -1072,14 +1083,14 @@ impl<'a> Parser<'a> {
         GriddedObject::new_rect_array(start_coords, Generic {
           wildcard: Wildcard::Exact,
           id: Some(temp_a),
-          type_id: None,
+          type_ids: None,
         }, self.scanner.peek_previous_coords()[1])
       } else {
         self.scanner.peek_rewind(1);
         GriddedObject::new_rect_array(start_coords, Generic {
           wildcard: Wildcard::Exact,
           id: None,
-          type_id: Some(self.type_expr()),
+          type_ids: Some(vec![self.type_expr()]),
         }, self.scanner.peek_previous_coords()[1])
       }
     }

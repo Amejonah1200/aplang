@@ -59,21 +59,21 @@ array_type     → ( path_type | tuple_type | lambda_type | primitive_type ) ( "
 
 tuple          → arguments ;
 path           → IDENTIFIER ( "." IDENTIFIER)* ;
-generics       → "<" type? ("," type)* ">" ;
-wildcard       → ("?" | IDENTIFIER) (">" | "<") type ;
+generics       → "<" wildcard? ("," wildcard)* ">" ;
+wildcard       → (("?" | IDENTIFIER) "<=")? type
+               | (("?" | IDENTIFIER) ">=" type ("&" type)*);
 lambda         → "(" IDENTIFIER? ("," IDENTIFIER)* ")" "->" expression ;
 LITERAL        → "true" | "false" | NUMBER | STRING | CHAR ;
 NUMBER         → "0"-"9" ("." "0"-"9")? ( PREFIX ) ;
 PREFIX         → ( "i" | "u" ) ( "64" | "32" | "16" | "8" )
                | "u"? ( "l" | "L" | "i" | "I" | "s" | "S" | "b" | "B" );
 
-// TODO: Fix Generics + Wildcards
 // TODO: Think about post-incr/decr
 // TODO: Think about c-style fors
 // TODO: Think about dataclsses
 // TODO: Think about enums (Rust and Java-like)
 
-array_clause   → "[" ( expression ":" | expression ":" expression | ":" expression ) "]" ;
+array_clause   → "[" ( expression ":" | expression ":" expression | ":" expression | expression ) "]" ;
 macro_annotation → ("@" | "#") "[" path
                    ("(" ( IDENTIFIER ("=" LITERAL) ("," IDENTIFIER ("=" LITERAL))*
                         | IDENTIFIER ("," IDENTIFIER)* )

@@ -251,7 +251,7 @@ impl Display for Type {
 pub struct Generic {
   pub wildcard: Wildcard,
   pub id: Option<GriddedObject<Token>>,
-  pub type_id: Option<GriddedObject<Type>>,
+  pub type_ids: Option<Vec<GriddedObject<Type>>>,
 }
 
 impl Display for Generic {
